@@ -29,34 +29,39 @@ void s8Print(s8 s)
 	putchar('\n');
 }
 
-s8 GetLine(s8 buf)
+// Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly
+s8 GetLine(s8* buf)
 {
+	assert(buf);
 	// Skip over any newlines, if they are at the beginning
-	s8 tmp = buf;
-	for (ptrdiff_t i = 0; i < buf.len; ++i)
+	s8 tmp = *buf;
+	for (ptrdiff_t i = 0; i < buf->len; ++i)
 	{
 		if (tmp.str[i] == '\n' || tmp.str[i] == '\r')
 		{
-			++buf.str;
-			--buf.len;
+			++buf->str;
+			--buf->len;
 		}
 		else
 			break;
 	}
 
 	// find the next newline, and end the string before it
-	for (char* s = buf.str; s < buf.str + buf.len; ++s)
+	for (char* s = buf->str; s < buf->str + buf->len; ++s)
 	{
 		if (*s == '\n')
 		{
 			s8 ret;
-			ret.str = buf.str;
-			ret.len = s - buf.str;
+			ret.str = buf->str;
+			ret.len = s - buf->str;
+			// Remove returned line from buf
+			buf->len -= ret.len;
+			buf->str += ret.len;
 			return ret;
 		}
 	}
 	// No newline found - last line or EOF
-	return buf;
+	return *buf;
 }
 
 AssemblerError Assemble(s8 assembly, LMCContext* code)
@@ -69,9 +74,15 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 int main(void)
 {
 	s8 bruh = S("\n\n bruh  \n bruhhh\n ");
-	s8 tmp = GetLine(bruh);
-	s8Print(tmp);
+	s8 tmp;
 
+	for (int i = 0; i < 3; ++i)
+	{
+		tmp = GetLine(&bruh);
+		s8Print(tmp);
+	}
+
+/*
 	bruh.len -= tmp.str - bruh.str + tmp.len;
 	bruh.str += tmp.str - bruh.str + tmp.len;
 
@@ -89,4 +100,5 @@ int main(void)
 
 	tmp = GetLine(bruh);
 	s8Print(tmp);
+*/
 }
