@@ -11,6 +11,7 @@
 #include <stdio.h>
 
 // function to print s8s for debugging
+// also escapes newlines and writes them verbatim like a debugger would
 void s8Print(s8 s)
 {
 //        printf("\"%.*s\"\n", (int)s.len, s.str);
@@ -29,7 +30,7 @@ void s8Print(s8 s)
 	putchar('\n');
 }
 
-// Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly
+// Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly until it returns an empty string
 s8 GetLine(s8* buf)
 {
 	assert(buf);
@@ -49,7 +50,7 @@ s8 GetLine(s8* buf)
 	// find the next newline, and end the string before it
 	for (char* s = buf->str; s < buf->str + buf->len; ++s)
 	{
-		if (*s == '\n')
+		if (*s == '\n' || *s == '\r')
 		{
 			s8 ret;
 			ret.str = buf->str;
@@ -60,8 +61,12 @@ s8 GetLine(s8* buf)
 			return ret;
 		}
 	}
+
 	// No newline found - last line or EOF
-	return *buf;
+	s8 ret = *buf;
+	buf->len -= ret.len;
+	buf->str += ret.len;
+	return ret;
 }
 
 AssemblerError Assemble(s8 assembly, LMCContext* code)
@@ -73,32 +78,12 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 
 int main(void)
 {
-	s8 bruh = S("\n\n bruh  \n bruhhh\n ");
+	s8 bruh = S("\n \n bruh  \n bruhhh\n  bruh");
 	s8 tmp;
 
-	for (int i = 0; i < 3; ++i)
+	for (int i = 0; i < 5; ++i)
 	{
 		tmp = GetLine(&bruh);
 		s8Print(tmp);
 	}
-
-/*
-	bruh.len -= tmp.str - bruh.str + tmp.len;
-	bruh.str += tmp.str - bruh.str + tmp.len;
-
-	tmp = GetLine(bruh);
-	s8Print(tmp);
-
-	bruh.len -= tmp.str - bruh.str + tmp.len;
-	bruh.str += tmp.str - bruh.str + tmp.len;
-
-	tmp = GetLine(bruh);
-	s8Print(tmp);
-
-	bruh.len -= tmp.str - bruh.str + tmp.len;
-	bruh.str += tmp.str - bruh.str + tmp.len;
-
-	tmp = GetLine(bruh);
-	s8Print(tmp);
-*/
 }
