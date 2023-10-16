@@ -2,7 +2,7 @@
 
 #define S(s) (s8) { (char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-#ifdef DEBUG
+#if defined(DEBUG) && defined(GNUC)
 #define assert(e) if (!(e)) __builtin_trap()
 #else
 #define assert(e)
@@ -47,7 +47,7 @@ s8 GetLine(s8* buf)
 			break;
 	}
 
-	// find the next newline, and end the string before it
+	// Find the next newline, and end the string before it
 	for (char* s = buf->str; s < buf->str + buf->len; ++s)
 	{
 		if (*s == '\n' || *s == '\r')
@@ -69,21 +69,48 @@ s8 GetLine(s8* buf)
 	return ret;
 }
 
+bool s8Equal(s8 a, s8 b)
+{
+	if (a.len != b.len) return false;
+
+	for (ptrdiff_t i = 0; i < a.len; ++i)
+	{
+		if (a.str[i] != b.str[i])
+			return false;
+	}
+
+	return true;
+}
+
 AssemblerError Assemble(s8 assembly, LMCContext* code)
 {
 	assert(code);
+	do {
+		s8Print(GetLine(&assembly));
+	} while(!s8Equals(S(""), assembly);
 	return 0;
 }
 
+
+#ifdef TEST
+
+int main(void)
+{
+	s8 test = S("\n \n test  \n testtt\r\n  test");
+
+	assert(s8Equal(GetLine(&test), S(" ")));
+	assert(s8Equal(GetLine(&test), S(" test  ")));
+	assert(s8Equal(GetLine(&test), S(" testtt")));
+	assert(s8Equal(GetLine(&test), S("  test")));
+	assert(s8Equal(GetLine(&test), S("")));
+}
+
+#else
 
 int main(void)
 {
 	s8 bruh = S("\n \n bruh  \n bruhhh\n  bruh");
 	s8 tmp;
 
-	for (int i = 0; i < 5; ++i)
-	{
-		tmp = GetLine(&bruh);
-		s8Print(tmp);
-	}
 }
+#endif
