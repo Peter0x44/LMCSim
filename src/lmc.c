@@ -2,8 +2,8 @@
 
 #define S(s) (s8) { (char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-#if defined(DEBUG) && defined(GNUC)
-#define assert(e) if (!(e)) __builtin_trap()
+#if defined(DEBUG) && !defined(GNUC)
+#define assert(e) do { if (!(e)) __builtin_trap(); } while (0);
 #else
 #define assert(e)
 #endif
@@ -85,9 +85,11 @@ bool s8Equal(s8 a, s8 b)
 AssemblerError Assemble(s8 assembly, LMCContext* code)
 {
 	assert(code);
+	int lineNumber = 1;
 	do {
+		printf("%d: ", lineNumber++);
 		s8Print(GetLine(&assembly));
-	} while(!s8Equals(S(""), assembly);
+	} while(!s8Equal(S(""), assembly));
 	return 0;
 }
 
@@ -96,7 +98,7 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 
 int main(void)
 {
-	s8 test = S("\n \n test  \n testtt\r\n  test");
+	s8 test = S("\n \n test  \r testtt\r\n  test");
 
 	assert(s8Equal(GetLine(&test), S(" ")));
 	assert(s8Equal(GetLine(&test), S(" test  ")));
@@ -110,7 +112,9 @@ int main(void)
 int main(void)
 {
 	s8 bruh = S("\n \n bruh  \n bruhhh\n  bruh");
-	s8 tmp;
+	LMCContext x;
+
+	Assemble(bruh, &x);
 
 }
 #endif
