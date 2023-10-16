@@ -2,8 +2,9 @@
 
 #define S(s) (s8) { (char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-#if defined(DEBUG) && !defined(GNUC)
+#if defined(DEBUG) && defined(__GNUC__)
 #define assert(e) do { if (!(e)) __builtin_trap(); } while (0);
+// Macro only works for "GNUC" compilers. I will decide if I care about visual studio later
 #else
 #define assert(e)
 #endif
