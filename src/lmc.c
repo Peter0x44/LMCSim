@@ -1,6 +1,6 @@
 #include "lmc.h"
 
-#define S(s) (s8) { (char*)s, (ptrdiff_t)(sizeof(s)-1) }
+#define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
 #if defined(DEBUG) && defined(__GNUC__)
 #define assert(e) do { if (!(e)) __builtin_trap(); } while (0);
@@ -49,7 +49,7 @@ s8 GetLine(s8* buf)
 	}
 
 	// Find the next newline, and end the string before it
-	for (char* s = buf->str; s < buf->str + buf->len; ++s)
+	for (unsigned char* s = buf->str; s < buf->str + buf->len; ++s)
 	{
 		if (*s == '\n' || *s == '\r')
 		{

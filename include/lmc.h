@@ -15,7 +15,7 @@ typedef struct
 
 typedef struct
 {
-	char* str;
+	unsigned char* str;
 	ptrdiff_t len;
 } s8;
 
