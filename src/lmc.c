@@ -37,7 +37,7 @@ s8 GetLine(s8* buf)
 	assert(buf);
 	// Skip over any newlines, if they are at the beginning
 	s8 tmp = *buf;
-	for (ptrdiff_t i = 0; i < buf->len; ++i)
+	for (int i = 0; i < buf->len; ++i)
 	{
 		if (tmp.str[i] == '\n' || tmp.str[i] == '\r')
 		{
@@ -49,13 +49,13 @@ s8 GetLine(s8* buf)
 	}
 
 	// Find the next newline, and end the string before it
-	for (unsigned char* s = buf->str; s < buf->str + buf->len; ++s)
+	for (int i = 0; i < buf->len; ++i)
 	{
-		if (*s == '\n' || *s == '\r')
+		if (buf->str[i] == '\n' || buf->str[i] == '\r')
 		{
 			s8 ret;
 			ret.str = buf->str;
-			ret.len = s - buf->str;
+			ret.len = i;
 			// Remove returned line from buf
 			buf->len -= ret.len;
 			buf->str += ret.len;
@@ -74,7 +74,7 @@ bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
 
-	for (ptrdiff_t i = 0; i < a.len; ++i)
+	for (int i = 0; i < a.len; ++i)
 	{
 		if (a.str[i] != b.str[i])
 			return false;
@@ -106,16 +106,16 @@ int main(void)
 	assert(s8Equal(GetLine(&test), S(" testtt")));
 	assert(s8Equal(GetLine(&test), S("  test")));
 	assert(s8Equal(GetLine(&test), S("")));
+	assert(s8Equal(GetLine(&test), S("")));
 }
 
 #else
 
 int main(void)
 {
-	s8 bruh = S("\n \n bruh  \n bruhhh\n  bruh");
+	s8 program = S("INP\nSTA 99\nADD 99\nOUT\nHLT");
 	LMCContext x;
 
-	Assemble(bruh, &x);
-
+	Assemble(program, &x);
 }
 #endif
