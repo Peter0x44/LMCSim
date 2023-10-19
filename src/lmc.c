@@ -62,22 +62,16 @@ s8 GetLine(s8* buf)
 {
 	assert(buf);
 	// Skip over any newlines, if they are at the beginning
-	s8 tmp = *buf;
-	for (int i = 0; i < buf->len; ++i)
+	while (buf->len > 0 && IsNewline(*buf->str))
 	{
-		if (tmp.str[i] == '\n' || tmp.str[i] == '\r')
-		{
-			++buf->str;
-			--buf->len;
-		}
-		else
-			break;
+		++buf->str;
+		--buf->len;
 	}
 
 	// Find the next newline, and end the string before it
 	for (int i = 0; i < buf->len; ++i)
 	{
-		if (buf->str[i] == '\n' || buf->str[i] == '\r')
+		if (IsNewline(buf->str[i]))
 		{
 			s8 ret;
 			ret.str = buf->str;
