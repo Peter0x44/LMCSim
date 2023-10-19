@@ -36,11 +36,6 @@ bool IsWhitespace(char c)
 	return ((c == ' ') || (c == '\t'));
 }
 
-bool IsNewline(char c)
-{
-	return ((c == '\n') || (c == '\r'));
-}
-
 s8 StripWhitespace(s8 line)
 {
 	while (line.len > 0 && IsWhitespace(*line.str))
@@ -87,10 +82,16 @@ s8 StripComment(s8 line)
 		}
 		else wasSlash = false;
 	}
+
 	if (commentPos)
 		line.len -= (line.str + line.len) - commentPos;
 
 	return line;
+}
+
+bool IsNewline(char c)
+{
+	return ((c == '\n') || (c == '\r'));
 }
 
 // Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly until it returns an empty string
@@ -153,39 +154,44 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 
 #ifdef TEST
 
+#define testcase(s1, s2) assert(s8Equal(s1, s2))
+
 int main(void)
 {
 	// Tests for GetLine
 	{
 		s8 test = S("\n \n test  \r testtt\r\n  test");
-		assert(s8Equal(GetLine(&test), S(" ")));
-		assert(s8Equal(GetLine(&test), S(" test  ")));
-		assert(s8Equal(GetLine(&test), S(" testtt")));
-		assert(s8Equal(GetLine(&test), S("  test")));
-		assert(s8Equal(GetLine(&test), S("")));
-		assert(s8Equal(GetLine(&test), S("")));
+		testcase(GetLine(&test), S(" "));
+		testcase(GetLine(&test), S(" test  "));
+		testcase(GetLine(&test), S(" testtt"));
+		testcase(GetLine(&test), S("  test"));
+		testcase(GetLine(&test), S(""));
+		testcase(GetLine(&test), S(""));
 	}
 	// Tests for StripWhitespace
 	{
-		assert(s8Equal(StripWhitespace(S("    hi   ")), S("hi")));
-		assert(s8Equal(StripWhitespace(S("    hi")), S("hi")));
-		assert(s8Equal(StripWhitespace(S("hi   ")), S("hi")));
-		assert(s8Equal(StripWhitespace(S("\t hello world hi   ")), S("hello world hi")));
-		assert(s8Equal(StripWhitespace(S("  \t   \t ")), S("")));
+		testcase(StripWhitespace(S("")), S(""));
+		testcase(StripWhitespace(S("       ")), S(""));
+		testcase(StripWhitespace(S("  \t   \t ")), S(""));
+		testcase(StripWhitespace(S("    hi   ")), S("hi"));
+		testcase(StripWhitespace(S("    hi")), S("hi"));
+		testcase(StripWhitespace(S("hi   ")), S("hi"));
+		testcase(StripWhitespace(S("\t hello world hi   ")), S("hello world hi"));
 	}
 	// Tests for StripComment
 	{
-		assert(s8Equal(StripComment(S("")), S("")));
-		assert(s8Equal(StripComment(S("INP")), S("INP")));
-		assert(s8Equal(StripComment(S("INP  ")), S("INP  ")));
-		assert(s8Equal(StripComment(S("INP  # comment")), S("INP  ")));
-		assert(s8Equal(StripComment(S("INP  // comment")), S("INP  ")));
-		assert(s8Equal(StripComment(S("INP  ; comment")), S("INP  ")));
-		assert(s8Equal(StripComment(S("INP  / / comment")), S("INP  / / comment")));
-		assert(s8Equal(StripComment(S("INP  comment")), S("INP  comment")));
-		assert(s8Equal(StripComment(S("INP  ; comment // othercomment")), S("INP  ")));
-		assert(s8Equal(StripComment(S("INP  // ; comment # othercomment")), S("INP  ")));
-		assert(s8Equal(StripComment(S("// ; comment # othercomment")), S("")));
+		testcase(StripComment(S("")), S(""));
+		testcase(StripComment(S("     ")), S("     "));
+		testcase(StripComment(S("INP")), S("INP"));
+		testcase(StripComment(S("INP  ")), S("INP  "));
+		testcase(StripComment(S("INP  # comment")), S("INP  "));
+		testcase(StripComment(S("INP  // comment")), S("INP  "));
+		testcase(StripComment(S("INP  ; comment")), S("INP  "));
+		testcase(StripComment(S("INP  / / comment")), S("INP  / / comment"));
+		testcase(StripComment(S("INP  comment")), S("INP  comment"));
+		testcase(StripComment(S("INP  ; comment // othercomment")), S("INP  "));
+		testcase(StripComment(S("INP  // ; comment # othercomment")), S("INP  "));
+		testcase(StripComment(S("// ; comment # othercomment")), S(""));
 	}
 }
 
