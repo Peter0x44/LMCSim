@@ -57,6 +57,42 @@ s8 StripWhitespace(s8 line)
 	return line;
 }
 
+bool IsCommentToken(char c)
+{
+	return ((c == '#') || (c == '/') || (c == ';'));
+}
+
+s8 StripComment(s8 line)
+{
+	unsigned char* commentPos = 0;
+	bool wasSlash = false;
+
+	for (int i = line.len-1; i >= 0; --i)
+	{
+		if (IsCommentToken(line.str[i]))
+		{
+			unsigned char* end = line.str + i;
+			if (line.str[i] == '/')
+			{
+				if (wasSlash)
+					commentPos = end;
+				else
+					wasSlash = true;
+			}
+			else
+			{
+				commentPos = end;
+				wasSlash = false;
+			}
+		}
+		else wasSlash = false;
+	}
+	if (commentPos)
+		line.len -= (line.str + line.len) - commentPos;
+
+	return line;
+}
+
 // Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly until it returns an empty string
 s8 GetLine(s8* buf)
 {
@@ -136,6 +172,20 @@ int main(void)
 		assert(s8Equal(StripWhitespace(S("hi   ")), S("hi")));
 		assert(s8Equal(StripWhitespace(S("\t hello world hi   ")), S("hello world hi")));
 		assert(s8Equal(StripWhitespace(S("  \t   \t ")), S("")));
+	}
+	// Tests for StripComment
+	{
+		assert(s8Equal(StripComment(S("")), S("")));
+		assert(s8Equal(StripComment(S("INP")), S("INP")));
+		assert(s8Equal(StripComment(S("INP  ")), S("INP  ")));
+		assert(s8Equal(StripComment(S("INP  # comment")), S("INP  ")));
+		assert(s8Equal(StripComment(S("INP  // comment")), S("INP  ")));
+		assert(s8Equal(StripComment(S("INP  ; comment")), S("INP  ")));
+		assert(s8Equal(StripComment(S("INP  / / comment")), S("INP  / / comment")));
+		assert(s8Equal(StripComment(S("INP  comment")), S("INP  comment")));
+		assert(s8Equal(StripComment(S("INP  ; comment // othercomment")), S("INP  ")));
+		assert(s8Equal(StripComment(S("INP  // ; comment # othercomment")), S("INP  ")));
+		assert(s8Equal(StripComment(S("// ; comment # othercomment")), S("")));
 	}
 }
 
