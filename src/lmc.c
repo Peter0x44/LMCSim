@@ -3,7 +3,7 @@
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
 #if defined(DEBUG) && defined(__GNUC__)
-#define assert(e) do { if (!(e)) __builtin_trap(); } while (0);
+#define assert(e) do { if (!(e)) __builtin_trap(); } while (0)
 // Macro only works for "GNUC" compilers. I will decide if I care about visual studio later
 #else
 #define assert(e)
@@ -29,6 +29,32 @@ void s8Print(s8 s)
 	}
 	putchar('\"');
 	putchar('\n');
+}
+
+bool IsWhitespace(char c)
+{
+	return ((c == ' ') || (c == '\t'));
+}
+
+bool IsNewline(char c)
+{
+	return ((c == '\n') || (c == '\r'));
+}
+
+s8 StripWhitespace(s8 line)
+{
+	while (line.len > 0 && IsWhitespace(*line.str))
+	{
+		++line.str;
+		--line.len;
+	}
+
+	while (line.len > 0 && IsWhitespace(line.str[line.len-1]))
+	{
+		--line.len;
+	}
+
+	return line;
 }
 
 // Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly until it returns an empty string
@@ -99,14 +125,24 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 
 int main(void)
 {
-	s8 test = S("\n \n test  \r testtt\r\n  test");
-
-	assert(s8Equal(GetLine(&test), S(" ")));
-	assert(s8Equal(GetLine(&test), S(" test  ")));
-	assert(s8Equal(GetLine(&test), S(" testtt")));
-	assert(s8Equal(GetLine(&test), S("  test")));
-	assert(s8Equal(GetLine(&test), S("")));
-	assert(s8Equal(GetLine(&test), S("")));
+	// Tests for GetLine
+	{
+		s8 test = S("\n \n test  \r testtt\r\n  test");
+		assert(s8Equal(GetLine(&test), S(" ")));
+		assert(s8Equal(GetLine(&test), S(" test  ")));
+		assert(s8Equal(GetLine(&test), S(" testtt")));
+		assert(s8Equal(GetLine(&test), S("  test")));
+		assert(s8Equal(GetLine(&test), S("")));
+		assert(s8Equal(GetLine(&test), S("")));
+	}
+	// Tests for StripWhitespace
+	{
+		assert(s8Equal(StripWhitespace(S("    hi   ")), S("hi")));
+		assert(s8Equal(StripWhitespace(S("    hi")), S("hi")));
+		assert(s8Equal(StripWhitespace(S("hi   ")), S("hi")));
+		assert(s8Equal(StripWhitespace(S("\t hello world hi   ")), S("hello world hi")));
+		assert(s8Equal(StripWhitespace(S("  \t   \t ")), S("")));
+	}
 }
 
 #else
