@@ -9,6 +9,7 @@
 #define assert(e)
 #endif
 
+
 #include <stdio.h>
 
 // function to print s8s for debugging
@@ -29,6 +30,67 @@ void s8Print(s8 s)
 	}
 	putchar('\"');
 	putchar('\n');
+}
+
+bool IsLower(unsigned char c)
+{
+	return (c >= 'a' && c <= 'z');
+}
+
+unsigned char ToUpper(unsigned char c)
+{
+	if (IsLower(c))
+		c += 'A' - 'a';
+	return c;
+}
+
+static const s8 mnemonics[] = {
+	S("HLT"), // 000
+	S("ADD"), // 1xx
+	S("SUB"), // 2xx
+	S("STA"), // 3xx
+	          // 4xx (unused)
+	S("LDA"), // 5xx
+	S("BRA"), // 6xx
+	S("BRZ"), // 7xx
+	S("BRP"), // 8xx
+	S("INP"), // 901
+	S("OUT"), // 902
+	S("OTC"), // 922
+	S("DAT")
+};
+
+// Give proper forward declarations later
+bool s8iEqual(s8 a, s8 b);
+
+int GetMnemonicValue(s8 mnemonic)
+{
+	if (false) {}
+
+	else if (s8iEqual(mnemonic, mnemonics[0 ])) // HLT
+		return 000;
+	else if (s8iEqual(mnemonic, mnemonics[1 ])) // ADD
+		return 100;
+	else if (s8iEqual(mnemonic, mnemonics[2 ])) // SUB
+		return 200;
+	else if (s8iEqual(mnemonic, mnemonics[3 ])) // STA
+		return 300;
+	else if (s8iEqual(mnemonic, mnemonics[4 ])) // LDA
+		return 500;
+	else if (s8iEqual(mnemonic, mnemonics[5 ])) // BRA
+		return 600;
+	else if (s8iEqual(mnemonic, mnemonics[6 ])) // BRZ
+		return 700;
+	else if (s8iEqual(mnemonic, mnemonics[7 ])) // BRP
+		return 800;
+	else if (s8iEqual(mnemonic, mnemonics[8 ])) // INP
+		return 901;
+	else if (s8iEqual(mnemonic, mnemonics[9 ])) // OUT
+		return 902;
+	else if (s8iEqual(mnemonic, mnemonics[10])) // OTC
+		return 922;
+	else
+		return -1;
 }
 
 bool IsWhitespace(char c)
@@ -57,6 +119,8 @@ bool IsCommentToken(char c)
 	return ((c == '#') || (c == '/') || (c == ';'));
 }
 
+// Strips comments from the end of the line
+// 3 tokens are supported: // ; #
 s8 StripComment(s8 line)
 {
 	unsigned char* commentPos = 0;
@@ -98,7 +162,7 @@ bool IsNewline(char c)
 s8 GetLine(s8* buf)
 {
 	assert(buf);
-	// Skip over any newlines, if they are at the beginning
+	// skip over any newlines, if they are at the beginning
 	while (buf->len > 0 && IsNewline(*buf->str))
 	{
 		++buf->str;
@@ -127,6 +191,40 @@ s8 GetLine(s8* buf)
 	return ret;
 }
 
+s8 GetWord(s8* line)
+{
+	assert(line);
+
+	// skip over any newlines, if they are at the beginning
+	while (line->len > 0 && *line->str == ' ')
+	{
+		++line->str;
+		--line->len;
+	}
+
+
+	// Find the next space, and end the string before it
+	for (int i = 0; i < line->len; ++i)
+	{
+		if (line->str[i] == ' ')
+		{
+			s8 ret;
+			ret.str = line->str;
+			ret.len = i;
+			// Remove returned word from line
+			line->len -= ret.len;
+			line->str += ret.len;
+			return ret;
+		}
+	}
+
+	// No space found - last word or end of line
+	s8 ret = *line;
+	line->len -= ret.len;
+	line->str += ret.len;
+	return ret;
+}
+
 bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
@@ -140,13 +238,34 @@ bool s8Equal(s8 a, s8 b)
 	return true;
 }
 
+// Case insensitive comparison
+bool s8iEqual(s8 a, s8 b)
+{
+	if (a.len != b.len) return false;
+
+	for (int i = 0; i < a.len; ++i)
+	{
+		if (ToUpper(a.str[i]) != ToUpper(b.str[i])) return false;
+	}
+
+	return true;
+}
+
 AssemblerError Assemble(s8 assembly, LMCContext* code)
 {
 	assert(code);
 	int lineNumber = 1;
 	do {
 		printf("%d: ", lineNumber++);
-		s8Print(GetLine(&assembly));
+		s8 line = GetLine(&assembly);
+		line = StripComment(line);
+		line = StripWhitespace(line);
+		s8 word = GetWord(&line);
+		if (!s8Equal(word, S("")))
+		{
+			int value = GetMnemonicValue(word);
+			printf("%d\n", value);
+		} else continue;
 	} while(!s8Equal(S(""), assembly));
 	return 0;
 }
@@ -160,18 +279,27 @@ int main(void)
 {
 	// Tests for GetLine
 	{
-		s8 test = S("\n \n test  \r testtt\r\n  test");
+		s8 test = S("\n \ntest  \r testtt\r\n  test");
 		testcase(GetLine(&test), S(" "));
-		testcase(GetLine(&test), S(" test  "));
+		testcase(GetLine(&test), S("test  "));
 		testcase(GetLine(&test), S(" testtt"));
 		testcase(GetLine(&test), S("  test"));
 		testcase(GetLine(&test), S(""));
 		testcase(GetLine(&test), S(""));
 	}
+	// Tests for GetWord
+	{
+		s8 test = S("this is a     line");
+		testcase(GetWord(&test), S("this"));
+		testcase(GetWord(&test), S("is"));
+		testcase(GetWord(&test), S("a"));
+		testcase(GetWord(&test), S("line"));
+		testcase(GetWord(&test), S(""));
+		testcase(GetWord(&test), S(""));
+	}
 	// Tests for StripWhitespace
 	{
 		testcase(StripWhitespace(S("")), S(""));
-		testcase(StripWhitespace(S("       ")), S(""));
 		testcase(StripWhitespace(S("  \t   \t ")), S(""));
 		testcase(StripWhitespace(S("    hi   ")), S("hi"));
 		testcase(StripWhitespace(S("    hi")), S("hi"));
@@ -193,13 +321,20 @@ int main(void)
 		testcase(StripComment(S("INP  // ; comment # othercomment")), S("INP  "));
 		testcase(StripComment(S("// ; comment # othercomment")), S(""));
 	}
+
+	// Tests for s8iEqual
+	{
+		assert(s8iEqual(S("Hi"), S("hi")));
+		assert(!s8iEqual(S("hi"), S("no")));
+		assert(s8iEqual(S("hi"), S("hi")));
+	}
 }
 
 #else
 
 int main(void)
 {
-	s8 program = S("INP\nSTA 99\nADD 99\nOUT\nHLT");
+	s8 program = S("inp\nsta 99\n    \nadd 99\nout\nhlt // output the sum of two numbers");
 	LMCContext x;
 
 	Assemble(program, &x);
