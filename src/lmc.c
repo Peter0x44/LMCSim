@@ -11,6 +11,8 @@
 
 
 #include <stdio.h>
+#include <string.h>
+#include <limits.h>
 
 // function to print s8s for debugging
 // also escapes newlines and writes them verbatim like a debugger would
@@ -30,6 +32,58 @@ void s8Print(s8 s)
 	}
 	putchar('\"');
 	putchar('\n');
+}
+
+bool IsDigit(unsigned char c)
+{
+	return ((c >= '0') && (c <= '9'));
+}
+
+typedef enum
+{
+	NOT_A_NUMBER = 1,
+	NOT_IN_RANGE = 2,
+} IntegerInputError;
+
+IntegerInputError s8ToInteger(s8 s, int* result)
+{
+	int i = 0;
+	bool negate = false;
+	unsigned int value = 0;
+	unsigned int limit = INT_MAX;
+
+	switch (*s.str) {
+		case '-':
+			i = 1;
+			negate = true;
+			limit = UINT_MAX;
+			break;
+		case '+':
+			i = 1;
+			break;
+	}
+
+	for (; i < s.len; ++i)
+	{
+		if (!IsDigit(s.str[i]))
+		{
+			return NOT_A_NUMBER;
+		}
+		int d = s.str[i] - '0';
+		if (value > (limit - d)/10)
+		{
+			return NOT_IN_RANGE;
+		}
+		value = value*10 + d;
+	}
+	if (value > 999)
+	{
+		return NOT_IN_RANGE;
+	}
+	if (negate) value *= -1;
+
+	*result = value;
+	return 0;
 }
 
 bool IsLower(unsigned char c)
@@ -195,7 +249,7 @@ s8 GetWord(s8* line)
 {
 	assert(line);
 
-	// skip over any newlines, if they are at the beginning
+	// skip over any spaces, if they are at the beginning
 	while (line->len > 0 && *line->str == ' ')
 	{
 		++line->str;
@@ -264,6 +318,15 @@ AssemblerError Assemble(s8 assembly, LMCContext* code)
 		if (!s8Equal(word, S("")))
 		{
 			int value = GetMnemonicValue(word);
+			bool takesOperand = ((value != 0) && (value % 100 == 0));
+			if (takesOperand)
+			{
+				int result;
+				word = GetWord(&line);
+				// TODO handle integer parsing errors
+				s8ToInteger(word, &result);
+				value += result;
+			}
 			printf("%d\n", value);
 		} else continue;
 	} while(!s8Equal(S(""), assembly));
@@ -327,6 +390,31 @@ int main(void)
 		assert(s8iEqual(S("Hi"), S("hi")));
 		assert(!s8iEqual(S("hi"), S("no")));
 		assert(s8iEqual(S("hi"), S("hi")));
+	}
+
+	// Tests for s8ToInteger
+	{
+		for (int i = -999; i < 1000; ++i)
+		{
+			unsigned char buf[5] = {0};
+			sprintf((char*)buf, "%d", i);
+			s8 s;
+			s.str = buf;
+			s.len = strlen((char*)buf);
+			int res;
+			IntegerInputError error = s8ToInteger(s, &res);
+			assert(error == 0);
+			assert(res == i);
+		}
+
+		{
+			s8 num = S("432075432057932475904203598347532048");
+			IntegerInputError error = s8ToInteger(num, 0);
+			assert(error == NOT_IN_RANGE);
+			num = S("-10...");
+			error = s8ToInteger(num, 0);
+			assert(error == NOT_A_NUMBER);
+		}
 	}
 }
 
