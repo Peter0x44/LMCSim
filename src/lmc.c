@@ -2,17 +2,35 @@
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-#if defined(DEBUG) && defined(__GNUC__)
-#define assert(e) do { if (!(e)) __builtin_trap(); } while (0)
 // Macro only works for "GNUC" compilers. I will decide if I care about visual studio later
-#else
-#define assert(e)
+#if defined(__GNUC__)
+#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
 #endif
 
 
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+
+typedef struct
+{
+	char* beginning;
+	char* end;
+} arena;
+
+void* alloc(arena* a, ptrdiff_t size, ptrdiff_t count)
+{
+	ptrdiff_t available = a->end - a->beginning;
+	if (count > (available/size))
+	{
+		return 0;
+	}
+	ptrdiff_t total = size * count;
+	char* p = a->beginning;
+	a->beginning += total;
+	memset(p, 0, total);
+	return p;
+}
 
 // function to print s8s for debugging
 // also escapes newlines and writes them verbatim like a debugger would
@@ -416,14 +434,36 @@ int main(void)
 			assert(error == NOT_A_NUMBER);
 		}
 	}
+
+	// Tests for arena allocator
+	{
+		char mem[1<<10];
+		arena a;
+		a.beginning = &mem[0];
+		a.end = &mem[sizeof(mem)];
+		arena free = a;
+
+		int* p = alloc(&a, sizeof(int), 128);
+		assert(p);
+		p = alloc(&a, sizeof(int), 64);
+		assert(p);
+		p = alloc(&a, sizeof(int), 64);
+		assert(p);
+		p = alloc(&a, sizeof(int), 128);
+		assert(!p);
+
+		a = free;
+		p = alloc(&a, sizeof(int), 257);
+		assert(!p);
+	}
 }
 
 #else
 
 int main(void)
 {
-	s8 program = S("inp\nsta 99\n    \nadd 99\nout\nhlt // output the sum of two numbers");
-	LMCContext x;
+	s8 program = S("inp\nsta 99    \nadd 99\nout\nhlt // doubles the entered number");
+	LMCContext x = {0} ;
 
 	Assemble(program, &x);
 }
