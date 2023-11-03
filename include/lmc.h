@@ -37,7 +37,7 @@ extern "C" {
 #endif
 
 // Assemble string assembly into LMCContext code
-AssemblerError Assemble(s8 assembly, LMCContext* code);
+AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict);
 
 // Execute next instruction of code
 RuntimeError Step(LMCContext* code);

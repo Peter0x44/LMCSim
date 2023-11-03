@@ -9,6 +9,7 @@
 
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <string.h>
 #include <limits.h>
 
@@ -31,6 +32,20 @@ void* alloc(arena* a, ptrdiff_t size, ptrdiff_t count)
 	memset(p, 0, total);
 	return p;
 }
+
+bool s8Equal(s8 a, s8 b)
+{
+	if (a.len != b.len) return false;
+
+	for (int i = 0; i < a.len; ++i)
+	{
+		if (a.str[i] != b.str[i])
+			return false;
+	}
+
+	return true;
+}
+
 
 // function to print s8s for debugging
 // also escapes newlines and writes them verbatim like a debugger would
@@ -161,6 +176,8 @@ int GetMnemonicValue(s8 mnemonic)
 		return 902;
 	else if (s8iEqual(mnemonic, mnemonics[10])) // OTC
 		return 922;
+	else if (s8iEqual(mnemonic, mnemonics[11])) // DAT
+		return 1000;
 	else
 		return -1;
 }
@@ -297,19 +314,6 @@ s8 GetWord(s8* line)
 	return ret;
 }
 
-bool s8Equal(s8 a, s8 b)
-{
-	if (a.len != b.len) return false;
-
-	for (int i = 0; i < a.len; ++i)
-	{
-		if (a.str[i] != b.str[i])
-			return false;
-	}
-
-	return true;
-}
-
 // Case insensitive comparison
 bool s8iEqual(s8 a, s8 b)
 {
@@ -323,31 +327,211 @@ bool s8iEqual(s8 a, s8 b)
 	return true;
 }
 
-AssemblerError Assemble(s8 assembly, LMCContext* code)
+typedef struct
+{
+	s8 label;
+	int value;
+} LabelInfo;
+
+AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 {
 	assert(code);
-	int lineNumber = 1;
+	memset(code->mailBoxes, 0, 100*sizeof(int));
+
+	// Memory for arena allocator
+	/*
+	char mem[1<<17];
+	arena a;
+	a.beginning = &mem[0];
+	a.end = &mem[sizeof(mem)];
+	*/
+
+	LabelInfo labels[100];
+	int labelCount = 0;
+
+	int lineNumber = 0;
+	int currentInstructionPointer = 0;
+	s8 save = assembly;
+
+	// First loop is to get all labels
+	// searches for lines in the format <word> DAT 99
+	// insert their address into a an array
+	// TODO: replace this with a hash map for better efficiency
+	// currently, naive O(n) lookup is done every time it's needed
 	do {
-		printf("%d: ", lineNumber++);
+		++lineNumber;
+		if (currentInstructionPointer > 99)
+		{
+			if (strict)
+			{
+				printf("too many instructions!\n");
+				return;
+			}
+			else break;
+		}
+		s8 line = GetLine(&assembly);
+		line = StripComment(line);
+		line = StripWhitespace(line);
+		s8 label = GetWord(&line);
+		// empty line
+		if (s8Equal(label, S("")))
+			continue;
+		else if (GetMnemonicValue(label) == -1)
+		{
+			if (GetMnemonicValue(GetWord(&line)) != -1)
+			{
+				bool labelRedefined = false;
+				for (int i = 0; i < labelCount; ++i)
+				{
+					if (s8Equal(labels[i].label, label))
+					{
+						// label redefined
+						// TODO implement proper error return
+						// NOTE: Peter Higginson LMC is fine
+						// with redefining labels - it just uses the first definition it finds as the value
+						// lmc.awk has a specific error for it. I decided to implement it as an error only if
+						// strict mode is enabled
+						if (strict)
+						{
+							printf("label redefined\n");
+							return;
+						}
+						labelRedefined = true;
+					}
+				}
+
+				if (!labelRedefined)
+				{
+					LabelInfo tmp;
+					tmp.label = label;
+					tmp.value = currentInstructionPointer++;
+					labels[labelCount++] = tmp;
+				}
+			}
+			else
+			{
+				printf("Unknown mnemonic at line %d", lineNumber);
+				return;
+			}
+		}
+		else
+		{
+			++currentInstructionPointer;
+		}
+	} while(!s8Equal(assembly, S("")));
+
+	// Empty string is EOF
+	/*
+	for (int i = 0; i < labelCount; ++i)
+	{
+		s8Print(labels[i].label);
+		printf("%d\n", labels[i].value);
+	}
+	*/
+
+	lineNumber = 0;
+	currentInstructionPointer = 0;
+	assembly = save;
+
+	do {
+		++lineNumber;
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
 		s8 word = GetWord(&line);
-		if (!s8Equal(word, S("")))
+		if (s8Equal(word, S("")))
 		{
-			int value = GetMnemonicValue(word);
-			bool takesOperand = ((value != 0) && (value % 100 == 0));
+			continue;
+		}
+		int opcode = GetMnemonicValue(word);
+		if (opcode == -1) opcode = GetMnemonicValue(GetWord(&line));
+		if (opcode == 1000)// || (opcode == -1))// && s8iEqual(GetWord(&line), mnemonics[11])))
+		{
+			s8 operand = GetWord(&line);
+			int value;
+			IntegerInputError ret = s8ToInteger(operand, &value);
+			if (ret == NOT_A_NUMBER)
+			{
+				if (s8Equal(operand, S("")))
+				{
+					code->mailBoxes[currentInstructionPointer++] = 0;
+				}
+				else
+				{
+					bool foundLabel = false;
+					for (int i = 0; i < labelCount; ++i)
+					{
+						if (s8Equal(labels[i].label, operand))
+						{
+							code->mailBoxes[currentInstructionPointer++] = labels[i].value;
+							foundLabel = true;
+						}
+					}
+					if (!foundLabel)
+					{
+						printf("ERROR: undefined label %%s (operand)");
+						return;
+					}
+				}
+			} else if (ret == NOT_IN_RANGE)
+			{
+				printf("ERROR: value (operand) is not in range 0, 999)");
+				return;
+			}
+			else
+			{
+				code->mailBoxes[currentInstructionPointer++] = value;
+			}
+		} else
+		{
+			bool takesOperand = ((opcode != 0) && (opcode != 1000) && (opcode % 100 == 0));
 			if (takesOperand)
 			{
-				int result;
-				word = GetWord(&line);
-				// TODO handle integer parsing errors
-				s8ToInteger(word, &result);
-				value += result;
+				s8 operand = GetWord(&line);
+				int value;
+				IntegerInputError ret = s8ToInteger(operand, &value);
+				if (ret == NOT_A_NUMBER)
+				{
+					bool foundLabel = false;
+					for (int i = 0; i < labelCount; ++i)
+					{
+						if (s8Equal(labels[i].label, operand))
+						{
+							code->mailBoxes[currentInstructionPointer++] = opcode + labels[i].value;
+							foundLabel = true;
+						}
+					}
+					if (!foundLabel)
+					{
+						printf("ERROR: undefined label %%s (operand)");
+						return;
+					}
+				} else if (ret == NOT_IN_RANGE)
+				{
+					printf("ERROR: value (operand) is not in range 0, 999)");
+					return;
+				}
+				else
+				{
+					code->mailBoxes[currentInstructionPointer++] = opcode + value;
+				}
 			}
-			printf("%d\n", value);
-		} else continue;
-	} while(!s8Equal(S(""), assembly));
+			else
+			{
+				code->mailBoxes[currentInstructionPointer++] = opcode;
+			}
+		}
+	} while(!s8Equal(assembly, S("")));
+
+	for (int i = 0; i < 10; ++i)
+	{
+		for (int j = 0; j < 10; ++j)
+		{
+			printf("%03i ", code->mailBoxes[i*10+j]);
+		}
+		printf("\n");
+	}
+
 	return 0;
 }
 
@@ -462,9 +646,14 @@ int main(void)
 
 int main(void)
 {
-	s8 program = S("inp\nsta 99    \nadd 99\nout\nhlt // doubles the entered number");
+//	s8 program = S("        lda space\n sta char\n loop    lda char\n out\n lda space\n otc\n lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 97\n char    dat\n // start of ASCII character table\n");
+//	s8 program = S("        LDA lda1\n STA outputList\n LDA sta1\n STA store\n LDA zero\n STA listSize\n inputLoop INP\n BRZ resetLoop\n store   DAT 380\n LDA store\n ADD increment\n STA store\n LDA listSize\n ADD increment\n STA listSize\n BRA inputLoop\n resetLoop LDA lda1\n STA load1\n ADD increment\n STA load2\n LDA sta1\n STA store1\n ADD increment\n STA store2\n LDA listSize\n SUB increment\n STA loopCount\n LDA zero\n STA isChange\n load1   DAT 580\n STA buffA\n load2   DAT 581\n STA buffB\n cmp     SUB buffA\n BRP nextItem\n swap    LDA buffB\n store1  DAT 380\n LDA buffA\n store2  DAT 381\n LDA increment\n STA isChange\n nextItem LDA store1\n ADD increment\n STA store1\n ADD increment\n STA store2\n LDA load1\n ADD increment\n STA load1\n ADD increment\n STA load2\n LDA loopCount\n SUB increment\n STA loopCount\n BRZ isFinished\n BRA load1\n isFinished LDA isChange\n BRZ outputList\n bra resetLoop\n outputList DAT 580\n OUT\n LDA outputList\n ADD increment\n STA outputList\n LDA listSize\n SUB increment\n STA listSize\n BRZ end\n BRA outputList\n end     HLT\n zero    DAT 0\n buffA   DAT 0\n buffB   DAT 0\n isChange DAT 0\n increment DAT 1\n listSize DAT 0\n loopCount DAT 0\n sta1    DAT 380\n lda1    DAT 580\n");
+//	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
+	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
+
+	
 	LMCContext x = {0} ;
 
-	Assemble(program, &x);
+	Assemble(program, &x, true);
 }
 #endif
