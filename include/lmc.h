@@ -20,10 +20,12 @@ typedef struct
 } s8;
 
 // Types of errors, could be bad assembly, or something else
-typedef enum
+typedef int AssemblerError;
+/*
+typedef struct
 {
-	lllllll
 } AssemblerError;
+*/
 
 typedef enum
 {

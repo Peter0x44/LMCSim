@@ -409,7 +409,7 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			}
 			else
 			{
-				printf("Unknown mnemonic \"label\" at line %d", lineNumber);
+				printf("Unknown instruction \"label\" at line %d", lineNumber);
 				return;
 			}
 		}
@@ -431,102 +431,91 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	currentInstructionPointer = 0;
 	assembly = save;
 
-	do {
+	while (!s8Equal(assembly, S("")))
+	{
 		++lineNumber;
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
 		s8 word = GetWord(&line);
+
 		if (s8Equal(word, S("")))
 		{
 			continue;
 		}
 		int opcode = GetMnemonicValue(word);
-		if (opcode == -1) opcode = GetMnemonicValue(GetWord(&line));
-		if (opcode == 1000)// || (opcode == -1))// && s8iEqual(GetWord(&line), mnemonics[11])))
+		if (opcode == -1)
 		{
-			s8 operand = GetWord(&line);
-			int value;
-			IntegerInputError ret = s8ToInteger(operand, &value);
-			if (ret == NOT_A_NUMBER)
+			// first word was not a valid mnemonic, so probably a label
+			word = GetWord(&line);
+			opcode = GetMnemonicValue(word);
+		}
+
+		if (opcode == -1)
+		{
+			// second word is still not a valid mnemonic - can't be a label, either
+			printf("unknown instruction \"word\" at line \"linenumber\"");
+			return;
+		}
+		bool takesAddress = ((opcode != 0) && (opcode % 100 == 0));
+		s8 tmp = GetWord(&line);
+		if (strict && !takesAddress && !s8Equal(tmp, S("")))
+		{
+			// Peter higginson LMC and lmc.awk don't care about this, so the check is "opt-in" for strict only
+			printf("address \"tmp\" given to instruction \"word\" that does not take an address");
+			return;
+		}
+		int address = 0;
+		IntegerInputError error = s8ToInteger(tmp, &address);
+		if (error == NOT_A_NUMBER)
+		{
+			bool labelFound = false;
+			for (int i = 0; i < labelCount; ++i)
 			{
-				if (s8Equal(operand, S("")))
+				if (s8Equal(labels[i].label, tmp))
 				{
-					code->mailBoxes[currentInstructionPointer++] = 0;
+					labelFound = true;
+					address = takesAddress ? labels[i].value : 0;
 				}
-				else
-				{
-					bool foundLabel = false;
-					for (int i = 0; i < labelCount; ++i)
-					{
-						if (s8Equal(labels[i].label, operand))
-						{
-							code->mailBoxes[currentInstructionPointer++] = labels[i].value;
-							foundLabel = true;
-						}
-					}
-					if (!foundLabel)
-					{
-						printf("ERROR: undefined label %%s (operand)");
-						return;
-					}
-				}
-			} else if (ret == NOT_IN_RANGE)
+			}
+			if (!labelFound)
 			{
-				printf("ERROR: value (operand) is not in range 0, 999)");
+				printf("undefined address label \"tmp\" used at line linenumber");
 				return;
 			}
-			else
-			{
-				code->mailBoxes[currentInstructionPointer++] = value;
-			}
-		} else
+		}
+		else if (error == NOT_IN_RANGE && (address < 0 || address > 99) && (opcode != 1000))
 		{
-			bool takesOperand = ((opcode != 0) && (opcode != 1000) && (opcode % 100 == 0));
-			if (takesOperand)
+			printf("address label \"tmp\" is out of range 0, 99");
+			return;
+		}
+
+		if (strict)
+		{
+			s8 word = GetWord(&line);
+			line.str -= word.len;
+			line.len += word.len;
+			if (!s8Equal(line, S("")))
 			{
-				s8 operand = GetWord(&line);
-				int value;
-				IntegerInputError ret = s8ToInteger(operand, &value);
-				if (ret == NOT_A_NUMBER)
-				{
-					bool foundLabel = false;
-					for (int i = 0; i < labelCount; ++i)
-					{
-						if (s8Equal(labels[i].label, operand))
-						{
-							code->mailBoxes[currentInstructionPointer++] = opcode + labels[i].value;
-							foundLabel = true;
-						}
-					}
-					if (!foundLabel)
-					{
-						printf("ERROR: undefined label %%s (operand)");
-						return;
-					}
-				} else if (ret == NOT_IN_RANGE)
-				{
-					printf("ERROR: value (operand) is not in range 0, 999)");
-					return;
-				}
-				else
-				{
-					code->mailBoxes[currentInstructionPointer++] = opcode + value;
-				}
-			}
-			else
-			{
-				code->mailBoxes[currentInstructionPointer++] = opcode;
+				printf("junk \"line\" found after address");
+				return;
 			}
 		}
-	} while(!s8Equal(assembly, S("")));
+
+		// handle DAT
+		if (opcode == 1000) opcode = 0;
+		if (!takesAddress) address = 0;
+		code->mailBoxes[currentInstructionPointer++] = opcode + address;
+
+	}
 
 	for (int i = 0; i < 10; ++i)
 	{
-		for (int j = 0; j < 10; ++j)
+		for (int j = 0; j < 9; ++j)
 		{
 			printf("%03i ", code->mailBoxes[i*10+j]);
 		}
+		printf("%03i", code->mailBoxes[i*10+9]);
 		printf("\n");
 	}
 
@@ -649,7 +638,7 @@ int main(void)
 //	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
 
-	s8 program = S("label DAT\nlabel ADD label\nlabel ADD\nnewlabel DAT\nADD newlabel");
+	s8 program = S("OUT 90");
 	
 	LMCContext x = {0} ;
 
