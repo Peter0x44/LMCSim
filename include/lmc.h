@@ -20,12 +20,13 @@ typedef struct
 } s8;
 
 // Types of errors, could be bad assembly, or something else
-typedef int AssemblerError;
-/*
 typedef struct
 {
+	int lineNumber;
+	s8 message; // each TAB means to insert context
+		    // this is to keep Assemble allocation-free
+	s8 context;
 } AssemblerError;
-*/
 
 typedef enum
 {

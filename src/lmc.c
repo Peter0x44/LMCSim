@@ -33,6 +33,51 @@ void* alloc(arena* a, ptrdiff_t size, ptrdiff_t count)
 	return p;
 }
 
+s8 s8AssemblerError(AssemblerError error, arena* a)
+{
+	// -1 because tab character won't get copied
+	ptrdiff_t messageLen = error.message.len + error.context.len - 1;
+
+	s8 message;
+	message.str = alloc(a, sizeof(unsigned char), messageLen);
+	message.len = messageLen;
+
+	s8 ret = message;
+
+	if (!message.str)
+	{
+		return (s8) { 0 };
+	}
+
+	while (error.message.str[0] != '\t')
+	{
+		assert(error.message.len > 0);
+		message.str[0] = error.message.str[0];
+		++error.message.str;
+		--error.message.len;
+		++message.str;
+		--message.len;
+	}
+
+	++error.message.str;
+	--error.message.len;
+
+	//assert(error.context.len > 0);
+	for (int i = 0; i < error.context.len; ++i)
+	{
+		message.str[i] = error.context.str[i];
+	}
+	message.str += error.context.len;
+	message.len -= error.context.len;
+
+	for (int i = 0; i < error.message.len; ++i)
+	{
+		message.str[i] = error.message.str[i];
+	}
+
+	return ret;
+}
+
 bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
@@ -59,6 +104,11 @@ void s8Print(s8 s)
 		{
 			putchar('\\');
 			putchar('n');
+		}
+		else if (s.str[i] == '\t')
+		{
+			putchar('\\');
+			putchar('t');
 		}
 		else
 			putchar(s.str[i]);
@@ -338,14 +388,6 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	assert(code);
 	memset(code->mailBoxes, 0, 100*sizeof(int));
 
-	// Memory for arena allocator
-	/*
-	char mem[1<<17];
-	arena a;
-	a.beginning = &mem[0];
-	a.end = &mem[sizeof(mem)];
-	*/
-
 	LabelInfo labels[100];
 	int labelCount = 0;
 
@@ -361,7 +403,12 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	// currently, naive O(n) lookup is done every time it's needed
 	while(!s8Equal(assembly, S(""))) // empty string is EOF
 	{
+		// BUG: multiple newlines in a row mean the line numbers aren't counted correctly
 		++lineNumber;
+
+		if (currentInstructionPointer > 99)
+			break;
+
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
@@ -388,8 +435,11 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 						// strict mode is enabled
 						if (strict)
 						{
-							printf("label \"label\" redefined\n");
-							return;
+							AssemblerError ret;
+							ret.lineNumber = lineNumber;
+							ret.message = S("label \t redefined");
+							ret.context = label;
+							return ret;
 						}
 						labelRedefined = true;
 					}
@@ -409,8 +459,11 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			}
 			else
 			{
-				printf("Unknown instruction \"label\" at line %d", lineNumber);
-				return;
+				AssemblerError ret;
+				ret.lineNumber = lineNumber;
+				ret.message = S("Unknown instruction \t");
+				ret.context = label;
+				return ret;
 			}
 		}
 		else
@@ -419,13 +472,19 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		}
 	} 
 
-	/*
-	for (int i = 0; i < labelCount; ++i)
+	if (strict && currentInstructionPointer > 99)
 	{
-		s8Print(labels[i].label);
-		printf("%d\n", labels[i].value);
+		// Peter Higginson LMC does not care about this, but lmc.awk does
+		// so, only check in strict mode
+		AssemblerError ret;
+		printf("%d\n", currentInstructionPointer);
+		ret.lineNumber = lineNumber;
+		ret.message = S("Program contains too many\t instructions");
+		// I can't return currentInstructionPointer because it would require an allocation
+		ret.context = S("");
+		return ret;
 	}
-	*/
+
 
 	lineNumber = 0;
 	currentInstructionPointer = 0;
@@ -434,6 +493,15 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	while (!s8Equal(assembly, S("")))
 	{
 		++lineNumber;
+		{
+			s8 tmp = assembly;
+			while (tmp.str[0] == '\n')
+			{
+				++tmp.str;
+				--tmp.len;
+				++lineNumber;
+			}
+		}
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
@@ -454,16 +522,22 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		if (opcode == -1)
 		{
 			// second word is still not a valid mnemonic - can't be a label, either
-			printf("unknown instruction \"word\" at line \"linenumber\"");
-			return;
+			AssemblerError ret;
+			ret.lineNumber = lineNumber;
+			ret.message = S("unknown instruction \t");
+			ret.context = word;
+			return ret;
 		}
 		bool takesAddress = ((opcode != 0) && (opcode % 100 == 0));
 		s8 tmp = GetWord(&line);
 		if (strict && !takesAddress && !s8Equal(tmp, S("")))
 		{
 			// Peter higginson LMC and lmc.awk don't care about this, so the check is "opt-in" for strict only
-			printf("address \"tmp\" given to instruction \"word\" that does not take an address");
-			return;
+			AssemblerError ret;
+			ret.lineNumber = lineNumber;
+			ret.message = S("instruction \t does not take an address");
+			ret.context = word;
+			return ret;
 		}
 		int address = 0;
 		IntegerInputError error = s8ToInteger(tmp, &address);
@@ -480,14 +554,20 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			}
 			if (!labelFound)
 			{
-				printf("undefined address label \"tmp\" used at line linenumber");
-				return;
+				AssemblerError ret;
+				ret.lineNumber = lineNumber;
+				ret.message = S("undefined address label \t");
+				ret.context = tmp;
+				return ret;
 			}
 		}
 		else if (error == NOT_IN_RANGE && (address < 0 || address > 99) && (opcode != 1000))
 		{
-			printf("address label \"tmp\" is out of range 0, 99");
-			return;
+			AssemblerError ret;
+			ret.lineNumber = lineNumber;
+			ret.message = S("address label \t is out of range 0, 99");
+			ret.context = tmp;
+			return ret;
 		}
 
 		if (strict)
@@ -497,8 +577,11 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			line.len += word.len;
 			if (!s8Equal(line, S("")))
 			{
-				printf("junk \"line\" found after address");
-				return;
+				AssemblerError ret;
+				ret.lineNumber = lineNumber;
+				ret.message = S("junk \t found after address");
+				ret.context = line;
+				return ret;
 			}
 		}
 
@@ -506,20 +589,9 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		if (opcode == 1000) opcode = 0;
 		if (!takesAddress) address = 0;
 		code->mailBoxes[currentInstructionPointer++] = opcode + address;
-
 	}
 
-	for (int i = 0; i < 10; ++i)
-	{
-		for (int j = 0; j < 9; ++j)
-		{
-			printf("%03i ", code->mailBoxes[i*10+j]);
-		}
-		printf("%03i", code->mailBoxes[i*10+9]);
-		printf("\n");
-	}
-
-	return 0;
+	return (AssemblerError){0};
 }
 
 
@@ -638,10 +710,35 @@ int main(void)
 //	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
 
-	s8 program = S("OUT 90");
+	s8 program = S("\r\n\r\n\r\nDAT\n\n");
 	
 	LMCContext x = {0} ;
 
-	Assemble(program, &x, false);
+	AssemblerError ret = Assemble(program, &x, true);
+
+	char mem[1<<17];
+	arena a;
+	a.beginning = &mem[0];
+	a.end = &mem[sizeof(mem)];
+
+	if (ret.lineNumber != 0)
+	{
+		printf("%d\n", ret.lineNumber);
+		s8 message = s8AssemblerError(ret, &a);
+		s8Print(message);
+	}
+
+	/*
+	for (int i = 0; i < 10; ++i)
+	{
+		for (int j = 0; j < 9; ++j)
+		{
+			printf("%03i ", code->mailBoxes[i*10+j]);
+		}
+		printf("%03i", code->mailBoxes[i*10+9]);
+		printf("\n");
+	}
+	*/
+
 }
 #endif
