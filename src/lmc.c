@@ -354,21 +354,14 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	s8 save = assembly;
 
 	// First loop is to get all labels
-	// searches for lines in the format <word> DAT 99
+	// searches for lines in the format <label> <mnemonic> <opcode>
+	// <label> is optional
 	// insert their address into a an array
 	// TODO: replace this with a hash map for better efficiency
 	// currently, naive O(n) lookup is done every time it's needed
-	do {
+	while(!s8Equal(assembly, S(""))) // empty string is EOF
+	{
 		++lineNumber;
-		if (currentInstructionPointer > 99)
-		{
-			if (strict)
-			{
-				printf("too many instructions!\n");
-				return;
-			}
-			else break;
-		}
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
@@ -376,11 +369,13 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		// empty line
 		if (s8Equal(label, S("")))
 			continue;
-		else if (GetMnemonicValue(label) == -1)
+
+		if (GetMnemonicValue(label) == -1) // first word of line is not a known mnemonic
 		{
-			if (GetMnemonicValue(GetWord(&line)) != -1)
+			if (GetMnemonicValue(GetWord(&line)) != -1) // second word is a known mnemonic - first word is a label
 			{
 				bool labelRedefined = false;
+				// Search if label has been defined already
 				for (int i = 0; i < labelCount; ++i)
 				{
 					if (s8Equal(labels[i].label, label))
@@ -393,7 +388,7 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 						// strict mode is enabled
 						if (strict)
 						{
-							printf("label redefined\n");
+							printf("label \"label\" redefined\n");
 							return;
 						}
 						labelRedefined = true;
@@ -407,10 +402,14 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 					tmp.value = currentInstructionPointer++;
 					labels[labelCount++] = tmp;
 				}
+				else
+				{
+					++currentInstructionPointer;
+				}
 			}
 			else
 			{
-				printf("Unknown mnemonic at line %d", lineNumber);
+				printf("Unknown mnemonic \"label\" at line %d", lineNumber);
 				return;
 			}
 		}
@@ -418,9 +417,8 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		{
 			++currentInstructionPointer;
 		}
-	} while(!s8Equal(assembly, S("")));
+	} 
 
-	// Empty string is EOF
 	/*
 	for (int i = 0; i < labelCount; ++i)
 	{
@@ -649,11 +647,12 @@ int main(void)
 //	s8 program = S("        lda space\n sta char\n loop    lda char\n out\n lda space\n otc\n lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 97\n char    dat\n // start of ASCII character table\n");
 //	s8 program = S("        LDA lda1\n STA outputList\n LDA sta1\n STA store\n LDA zero\n STA listSize\n inputLoop INP\n BRZ resetLoop\n store   DAT 380\n LDA store\n ADD increment\n STA store\n LDA listSize\n ADD increment\n STA listSize\n BRA inputLoop\n resetLoop LDA lda1\n STA load1\n ADD increment\n STA load2\n LDA sta1\n STA store1\n ADD increment\n STA store2\n LDA listSize\n SUB increment\n STA loopCount\n LDA zero\n STA isChange\n load1   DAT 580\n STA buffA\n load2   DAT 581\n STA buffB\n cmp     SUB buffA\n BRP nextItem\n swap    LDA buffB\n store1  DAT 380\n LDA buffA\n store2  DAT 381\n LDA increment\n STA isChange\n nextItem LDA store1\n ADD increment\n STA store1\n ADD increment\n STA store2\n LDA load1\n ADD increment\n STA load1\n ADD increment\n STA load2\n LDA loopCount\n SUB increment\n STA loopCount\n BRZ isFinished\n BRA load1\n isFinished LDA isChange\n BRZ outputList\n bra resetLoop\n outputList DAT 580\n OUT\n LDA outputList\n ADD increment\n STA outputList\n LDA listSize\n SUB increment\n STA listSize\n BRZ end\n BRA outputList\n end     HLT\n zero    DAT 0\n buffA   DAT 0\n buffB   DAT 0\n isChange DAT 0\n increment DAT 1\n listSize DAT 0\n loopCount DAT 0\n sta1    DAT 380\n lda1    DAT 580\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
-	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
+//	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
 
+	s8 program = S("label DAT\nlabel ADD label\nlabel ADD\nnewlabel DAT\nADD newlabel");
 	
 	LMCContext x = {0} ;
 
-	Assemble(program, &x, true);
+	Assemble(program, &x, false);
 }
 #endif
