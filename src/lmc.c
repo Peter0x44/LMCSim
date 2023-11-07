@@ -19,17 +19,18 @@ typedef struct
 	char* end;
 } arena;
 
-void* alloc(arena* a, ptrdiff_t size, ptrdiff_t count)
+// function doesn't take a size or alignment because I don't expect to allocate anything
+// other than chars using it.
+void* alloc(arena* a, ptrdiff_t count)
 {
 	ptrdiff_t available = a->end - a->beginning;
-	if (count > (available/size))
+	if (count > available)
 	{
 		return 0;
 	}
-	ptrdiff_t total = size * count;
 	char* p = a->beginning;
-	a->beginning += total;
-	memset(p, 0, total);
+	a->beginning += count;
+	memset(p, 0, count);
 	return p;
 }
 
@@ -39,7 +40,7 @@ s8 s8AssemblerError(AssemblerError error, arena* a)
 	ptrdiff_t messageLen = error.message.len + error.context.len - 1;
 
 	s8 message;
-	message.str = alloc(a, sizeof(unsigned char), messageLen);
+	message.str = alloc(a, messageLen);
 	message.len = messageLen;
 
 	s8 ret = message;
@@ -301,8 +302,14 @@ bool IsNewline(char c)
 s8 GetLine(s8* buf)
 {
 	assert(buf);
-	// skip over any newlines, if they are at the beginning
-	while (buf->len > 0 && IsNewline(*buf->str))
+	// skip over any \r, if they are at the beginning
+	while (buf->len > 0 && (*buf->str) == '\r')
+	{
+		++buf->str;
+		--buf->len;
+	}
+	// remove the first newline from the string
+	if (buf->len > 0 && (*buf->str) == '\n')
 	{
 		++buf->str;
 		--buf->len;
@@ -383,6 +390,9 @@ typedef struct
 	int value;
 } LabelInfo;
 
+// Perhaps this return value is not well designed... it just makes the allocation the responsibility of other code
+// and can't return an error message with more than one "context"
+// Shouldn't be too hard to refactor if it becomes a problem
 AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 {
 	assert(code);
@@ -403,7 +413,6 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	// currently, naive O(n) lookup is done every time it's needed
 	while(!s8Equal(assembly, S(""))) // empty string is EOF
 	{
-		// BUG: multiple newlines in a row mean the line numbers aren't counted correctly
 		++lineNumber;
 
 		if (currentInstructionPointer > 99)
@@ -477,7 +486,6 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		// Peter Higginson LMC does not care about this, but lmc.awk does
 		// so, only check in strict mode
 		AssemblerError ret;
-		printf("%d\n", currentInstructionPointer);
 		ret.lineNumber = lineNumber;
 		ret.message = S("Program contains too many\t instructions");
 		// I can't return currentInstructionPointer because it would require an allocation
@@ -493,15 +501,7 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	while (!s8Equal(assembly, S("")))
 	{
 		++lineNumber;
-		{
-			s8 tmp = assembly;
-			while (tmp.str[0] == '\n')
-			{
-				++tmp.str;
-				--tmp.len;
-				++lineNumber;
-			}
-		}
+
 		s8 line = GetLine(&assembly);
 		line = StripComment(line);
 		line = StripWhitespace(line);
@@ -686,17 +686,17 @@ int main(void)
 		a.end = &mem[sizeof(mem)];
 		arena free = a;
 
-		int* p = alloc(&a, sizeof(int), 128);
+		char* p = alloc(&a, 512);
 		assert(p);
-		p = alloc(&a, sizeof(int), 64);
+		p = alloc(&a, 256);
 		assert(p);
-		p = alloc(&a, sizeof(int), 64);
+		p = alloc(&a, 256);
 		assert(p);
-		p = alloc(&a, sizeof(int), 128);
+		p = alloc(&a, 2048);
 		assert(!p);
 
 		a = free;
-		p = alloc(&a, sizeof(int), 257);
+		p = alloc(&a, 1025);
 		assert(!p);
 	}
 }
@@ -710,7 +710,7 @@ int main(void)
 //	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
 
-	s8 program = S("\r\n\r\n\r\nDAT\n\n");
+	s8 program = S("\n\n\nDat 10\n\n");
 	
 	LMCContext x = {0} ;
 
@@ -728,17 +728,15 @@ int main(void)
 		s8Print(message);
 	}
 
-	/*
 	for (int i = 0; i < 10; ++i)
 	{
 		for (int j = 0; j < 9; ++j)
 		{
-			printf("%03i ", code->mailBoxes[i*10+j]);
+			printf("%03i ", x.mailBoxes[i*10+j]);
 		}
-		printf("%03i", code->mailBoxes[i*10+9]);
+		printf("%03i", x.mailBoxes[i*10+9]);
 		printf("\n");
 	}
-	*/
 
 }
 #endif
