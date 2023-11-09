@@ -30,8 +30,10 @@ typedef struct
 
 typedef enum
 {
-	ERROR_BAD_PC, // ex. type in number that is not in the range (-999, 999)
-	ERROR_HALT // Halt instruction reached - program execution finished
+	ERROR_OK, // Instruction ran normally
+	ERROR_BAD_PC, // PC value isn't valid - reached out of range
+	ERROR_HALT, // Halt instruction reached - program execution finished
+	ERROR_BAD_INSTRUCTION // Bad instruction executed (example: 4xx)
 } RuntimeError;
 // errors that can happen during runtime: example PC value is outside of [0, 99]
 

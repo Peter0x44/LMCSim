@@ -1,4 +1,5 @@
 #include "lmc.h"
+#include "mapfile.h"
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
@@ -594,6 +595,105 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 	return (AssemblerError){0};
 }
 
+RuntimeError Step(LMCContext* code)
+{
+	assert(code);
+	for (int i = 0; i < 100; ++i)
+	{
+		assert(code->mailBoxes[i] >= 0 && code->mailBoxes[i] < 1000);
+	}
+
+	if (code->programCounter > 99 || code->programCounter < 0)
+	{
+		return ERROR_BAD_PC;
+	}
+
+	int instruction = code->mailBoxes[code->programCounter++];
+
+	if (instruction == 0) // HLT
+	{
+		return ERROR_HALT;
+	}
+
+	int opcode = instruction / 100;
+	int operand = instruction % 100;
+
+	if (opcode == 1) // ADD
+	{
+		code->accumulator += code->mailBoxes[operand];
+		return ERROR_OK;
+	}
+
+	if (opcode == 2) // SUB
+	{
+		code->accumulator -= code->mailBoxes[operand];
+		return ERROR_OK;
+	}
+
+	if (opcode == 3) // STA
+	{
+		code->mailBoxes[operand] = code->accumulator;
+		return ERROR_OK;
+	}
+
+	if (opcode == 4) // Unused
+	{
+		return ERROR_BAD_INSTRUCTION;
+	}
+
+	if (opcode == 5) // LDA
+	{
+		code->accumulator = code->mailBoxes[operand];
+		return ERROR_OK;
+	}
+
+	if (opcode == 6) // BRA
+	{
+		code->programCounter = operand;
+		return ERROR_OK;
+	}
+
+	if (opcode == 7) // BRZ
+	{
+		if (code->accumulator == 0)
+		{
+			code->programCounter = operand;
+		}
+		return ERROR_OK;
+	}
+
+	if (opcode == 8)
+	{
+		if (code->accumulator >= 0)
+		{
+			code->programCounter = operand;
+		}
+		return ERROR_OK;
+	}
+
+	if (opcode == 9)
+	{
+		if (operand == 1) // INP
+		{
+			// UNIMPLEMENTED
+		}
+
+		if (operand == 2) // OUT
+		{
+			printf("%d\n", code->accumulator);
+			return ERROR_OK;
+		}
+
+		if (operand == 22) // OTC
+		{
+			putchar((unsigned char) code->accumulator);
+			return ERROR_OK;
+		}
+
+		return ERROR_BAD_INSTRUCTION;
+	}
+	return ERROR_BAD_INSTRUCTION;
+}
 
 #ifdef TEST
 
@@ -703,14 +803,22 @@ int main(void)
 
 #else
 
-int main(void)
+int main(int argc, char* argv[])
 {
 //	s8 program = S("        lda space\n sta char\n loop    lda char\n out\n lda space\n otc\n lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 97\n char    dat\n // start of ASCII character table\n");
 //	s8 program = S("        LDA lda1\n STA outputList\n LDA sta1\n STA store\n LDA zero\n STA listSize\n inputLoop INP\n BRZ resetLoop\n store   DAT 380\n LDA store\n ADD increment\n STA store\n LDA listSize\n ADD increment\n STA listSize\n BRA inputLoop\n resetLoop LDA lda1\n STA load1\n ADD increment\n STA load2\n LDA sta1\n STA store1\n ADD increment\n STA store2\n LDA listSize\n SUB increment\n STA loopCount\n LDA zero\n STA isChange\n load1   DAT 580\n STA buffA\n load2   DAT 581\n STA buffB\n cmp     SUB buffA\n BRP nextItem\n swap    LDA buffB\n store1  DAT 380\n LDA buffA\n store2  DAT 381\n LDA increment\n STA isChange\n nextItem LDA store1\n ADD increment\n STA store1\n ADD increment\n STA store2\n LDA load1\n ADD increment\n STA load1\n ADD increment\n STA load2\n LDA loopCount\n SUB increment\n STA loopCount\n BRZ isFinished\n BRA load1\n isFinished LDA isChange\n BRZ outputList\n bra resetLoop\n outputList DAT 580\n OUT\n LDA outputList\n ADD increment\n STA outputList\n LDA listSize\n SUB increment\n STA listSize\n BRZ end\n BRA outputList\n end     HLT\n zero    DAT 0\n buffA   DAT 0\n buffB   DAT 0\n isChange DAT 0\n increment DAT 1\n listSize DAT 0\n loopCount DAT 0\n sta1    DAT 380\n lda1    DAT 580\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
 //	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
 
-	s8 program = S("\n\n\nDat 10\n\n");
+	//s8 program = S("\n\n\nDat 10\n\n");
+	//s8 program = S("loop    lda counter\n add one\n otc\n sta counter\n sub begin\n sub twentysix\n brp end\n bra loop\n end     HLT\n counter DAT 96\n one     DAT 1\n twentysix DAT 26\n begin   DAT 96\n ");
+//	s8 program = S("        lda space\n sta char\n loop    lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 127\n char    dat\n // output the basic ASCII characters\n ");
+	s8 program;
+	int fd = s8FileMap(argv[1], &program);
+	if (fd == -1)
+	{
+		return 1;
+	}
 	
 	LMCContext x = {0} ;
 
@@ -738,5 +846,13 @@ int main(void)
 		printf("\n");
 	}
 
+	while (true)
+	{
+		RuntimeError ret = Step(&x);
+
+		if (ret != ERROR_OK) break;
+	}
+	printf("\n");
+	s8FileUnmap(fd, program);
 }
 #endif
