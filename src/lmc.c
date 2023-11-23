@@ -342,18 +342,18 @@ s8 GetWord(s8* line)
 {
 	assert(line);
 
-	// skip over any spaces, if they are at the beginning
-	while (line->len > 0 && *line->str == ' ')
+	// skip over leading whitespace
+	while (line->len > 0 && IsWhitespace(*line->str))
 	{
 		++line->str;
 		--line->len;
 	}
 
 
-	// Find the next space, and end the string before it
+	// Find the next whitespace, and end the string before it
 	for (int i = 0; i < line->len; ++i)
 	{
-		if (line->str[i] == ' ')
+		if (IsWhitespace(line->str[i]))
 		{
 			s8 ret;
 			ret.str = line->str;
@@ -365,7 +365,7 @@ s8 GetWord(s8* line)
 		}
 	}
 
-	// No space found - last word or end of line
+	// No whitespace found - last word or end of line
 	s8 ret = *line;
 	line->len -= ret.len;
 	line->str += ret.len;
