@@ -206,13 +206,15 @@ int GetMnemonicValue(s8 mnemonic)
 {
 	if (false) {}
 
-	else if (s8iEqual(mnemonic, mnemonics[0 ])) // HLT
+	else if (s8iEqual(mnemonic, mnemonics[0 ]) // HLT
+		|| s8iEqual(mnemonic, S("COB")))   // COB
 		return 000;
 	else if (s8iEqual(mnemonic, mnemonics[1 ])) // ADD
 		return 100;
 	else if (s8iEqual(mnemonic, mnemonics[2 ])) // SUB
 		return 200;
-	else if (s8iEqual(mnemonic, mnemonics[3 ])) // STA
+	else if (s8iEqual(mnemonic, mnemonics[3 ])  // STA
+		|| s8iEqual(mnemonic, S("STO")))    // STO
 		return 300;
 	else if (s8iEqual(mnemonic, mnemonics[4 ])) // LDA
 		return 500;
