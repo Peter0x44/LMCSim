@@ -8,7 +8,6 @@
 #define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
 #endif
 
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -620,6 +619,7 @@ RuntimeError Step(LMCContext* code)
 	int opcode = instruction / 100;
 	int operand = instruction % 100;
 
+
 	if (opcode == 1) // ADD
 	{
 		code->accumulator += code->mailBoxes[operand];
@@ -664,7 +664,7 @@ RuntimeError Step(LMCContext* code)
 		return ERROR_OK;
 	}
 
-	if (opcode == 8)
+	if (opcode == 8) // BRP
 	{
 		if (code->accumulator >= 0)
 		{
@@ -673,11 +673,18 @@ RuntimeError Step(LMCContext* code)
 		return ERROR_OK;
 	}
 
+
 	if (opcode == 9)
 	{
+		// These need to interact with external state
+		// Need some ideas on how to get it - maybe use function pointer callbacks???
 		if (operand == 1) // INP
 		{
-			// UNIMPLEMENTED
+			// Terrible implementation
+			int input;
+			scanf("%d", &input);
+			code->accumulator = input;
+			return ERROR_OK;
 		}
 
 		if (operand == 2) // OUT
