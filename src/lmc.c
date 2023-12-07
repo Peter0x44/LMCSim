@@ -483,7 +483,7 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		}
 	} 
 
-	if (strict && currentInstructionPointer > 99)
+	if (strict && currentInstructionPointer > 100)
 	{
 		// Peter Higginson LMC does not care about this, but lmc.awk does
 		// so, only check in strict mode
