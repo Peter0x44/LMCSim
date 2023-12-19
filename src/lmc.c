@@ -3,9 +3,10 @@
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-// Macro only works for "GNUC" compilers. I will decide if I care about visual studio later
-#if defined(__GNUC__)
-#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
+#if defined(__has_builtin)
+	#if __has_builtin(__builtin_unreachable)
+		#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
+	#endif
 #endif
 
 #include <stdio.h>
