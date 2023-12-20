@@ -827,12 +827,8 @@ int main(int argc, char* argv[])
 	//s8 program = S("\n\n\nDat 10\n\n");
 	//s8 program = S("loop    lda counter\n add one\n otc\n sta counter\n sub begin\n sub twentysix\n brp end\n bra loop\n end     HLT\n counter DAT 96\n one     DAT 1\n twentysix DAT 26\n begin   DAT 96\n ");
 //	s8 program = S("        lda space\n sta char\n loop    lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 127\n char    dat\n // output the basic ASCII characters\n ");
-	s8 program;
-	int fd = s8FileMap(argv[1], &program);
-	if (fd == -1)
-	{
-		return 1;
-	}
+	s8 program = s8FileMap(argv[1]);
+	if (s8Equal(program, S(""))) return 1;
 	
 	LMCContext x = {0} ;
 
