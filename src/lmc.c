@@ -610,72 +610,73 @@ RuntimeError Step(LMCContext* code)
 		return ERROR_BAD_PC;
 	}
 
-	int instruction = code->mailBoxes[code->programCounter++];
+	int instruction = code->mailBoxes[code->programCounter];
+
 
 	if (instruction == 0) // HLT
 	{
 		return ERROR_HALT;
 	}
 
+	RuntimeError ret = ERROR_OK;
+
 	int opcode = instruction / 100;
 	int operand = instruction % 100;
-
 
 	if (opcode == 1) // ADD
 	{
 		code->accumulator += code->mailBoxes[operand];
-		return ERROR_OK;
 	}
 
-	if (opcode == 2) // SUB
+	else if (opcode == 2) // SUB
 	{
 		code->accumulator -= code->mailBoxes[operand];
-		return ERROR_OK;
 	}
 
-	if (opcode == 3) // STA
+	else if (opcode == 3) // STA
 	{
 		code->mailBoxes[operand] = code->accumulator;
-		return ERROR_OK;
 	}
 
-	if (opcode == 4) // Unused
+	else if (opcode == 4) // Unused
 	{
-		return ERROR_BAD_INSTRUCTION;
+		ret = ERROR_BAD_INSTRUCTION;
 	}
 
-	if (opcode == 5) // LDA
+	else if (opcode == 5) // LDA
 	{
 		code->accumulator = code->mailBoxes[operand];
-		return ERROR_OK;
 	}
 
-	if (opcode == 6) // BRA
+	else if (opcode == 6) // BRA
 	{
 		code->programCounter = operand;
-		return ERROR_OK;
+		// return here to avoid incrementing PC
+		return ret;
 	}
 
-	if (opcode == 7) // BRZ
+	else if (opcode == 7) // BRZ
 	{
 		if (code->accumulator == 0)
 		{
 			code->programCounter = operand;
+			// return here to avoid incrementing PC
+			return ret;
 		}
-		return ERROR_OK;
 	}
 
-	if (opcode == 8) // BRP
+	else if (opcode == 8) // BRP
 	{
 		if (code->accumulator >= 0)
 		{
 			code->programCounter = operand;
+			// return here to avoid incrementing PC
+			return ret;
 		}
-		return ERROR_OK;
 	}
 
 
-	if (opcode == 9)
+	else if (opcode == 9)
 	{
 		// These need to interact with external state
 		// Need some ideas on how to get it - maybe use function pointer callbacks???
@@ -685,24 +686,27 @@ RuntimeError Step(LMCContext* code)
 			int input;
 			scanf("%d", &input);
 			code->accumulator = input;
-			return ERROR_OK;
 		}
 
-		if (operand == 2) // OUT
+		else if (operand == 2) // OUT
 		{
 			printf("%d\n", code->accumulator);
-			return ERROR_OK;
 		}
 
-		if (operand == 22) // OTC
+		else if (operand == 22) // OTC
 		{
 			putchar((unsigned char) code->accumulator);
-			return ERROR_OK;
 		}
-
-		return ERROR_BAD_INSTRUCTION;
+		else
+		{
+			ret = ERROR_BAD_INSTRUCTION;
+		}
 	}
-	return ERROR_BAD_INSTRUCTION;
+	if (ret == ERROR_OK)
+	{
+		++code->programCounter;
+	}
+	return ret;
 }
 
 #ifdef TEST
@@ -723,7 +727,7 @@ int main(void)
 	}
 	// Tests for GetWord
 	{
-		s8 test = S("this is a     line");
+		s8 test = S("this is a  \t \r line");
 		testcase(GetWord(&test), S("this"));
 		testcase(GetWord(&test), S("is"));
 		testcase(GetWord(&test), S("a"));
@@ -856,13 +860,26 @@ int main(int argc, char* argv[])
 		printf("\n");
 	}
 
+	RuntimeError termination;
 	while (true)
 	{
 		RuntimeError ret = Step(&x);
 
-		if (ret != ERROR_OK) break;
+		if (ret != ERROR_OK) { termination = ret; break; }
+	}
+	switch (termination)
+	{
+		case ERROR_HALT:
+			break; // normal program termination
+		case ERROR_BAD_PC:
+			printf("Bad PC value %d", x.programCounter);
+			break;
+		case ERROR_BAD_INSTRUCTION:
+			printf("Bad instruction value %d", x.mailBoxes[x.programCounter]);
+			break;
+		default:
+			break;
 	}
 	printf("\n");
-	s8FileUnmap(fd, program);
 }
 #endif
