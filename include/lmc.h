@@ -6,7 +6,7 @@
 typedef struct
 {
 	int mailBoxes[100]; // main memory
-	int accumulator;
+	unsigned int accumulator;
 	int programCounter;
 	int outbox;
 	bool wantsInput;

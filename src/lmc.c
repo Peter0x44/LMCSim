@@ -579,9 +579,9 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 
 		if (strict)
 		{
-			s8 word = GetWord(&line);
-			line.str -= word.len;
-			line.len += word.len;
+			s8 junk = GetWord(&line);
+			line.str -= junk.len;
+			line.len += junk.len;
 			if (!s8Equal(line, S("")))
 			{
 				AssemblerError ret;
@@ -671,7 +671,7 @@ RuntimeError Step(LMCContext* code)
 
 	else if (opcode == 8) // BRP
 	{
-		if (code->accumulator >= 0)
+		if ((int)code->accumulator >= 0)
 		{
 			code->programCounter = operand;
 			// return here to avoid incrementing PC
@@ -694,7 +694,7 @@ RuntimeError Step(LMCContext* code)
 
 		else if (operand == 2) // OUT
 		{
-			printf("%d\n", code->accumulator);
+			printf("%d\n", (int)code->accumulator);
 		}
 
 		else if (operand == 22) // OTC
