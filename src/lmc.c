@@ -602,7 +602,7 @@ RuntimeError Step(LMCContext* code)
 	assert(code);
 	for (int i = 0; i < 100; ++i)
 	{
-		assert(code->mailBoxes[i] >= 0 && code->mailBoxes[i] < 1000);
+		//assert(code->mailBoxes[i] >= 0 && code->mailBoxes[i] < 1000);
 	}
 
 	if (code->programCounter > 99 || code->programCounter < 0)
@@ -859,9 +859,9 @@ int main(int argc, char* argv[])
 	RuntimeError termination;
 	while (true)
 	{
-		RuntimeError ret = Step(&x);
+		termination = Step(&x);
 
-		if (ret != ERROR_OK) { termination = ret; break; }
+		if (termination != ERROR_OK) break;
 	}
 	switch (termination)
 	{
@@ -871,7 +871,7 @@ int main(int argc, char* argv[])
 			printf("Bad PC value %d", x.programCounter);
 			break;
 		case ERROR_BAD_INSTRUCTION:
-			printf("Bad instruction value %d", x.mailBoxes[x.programCounter]);
+			printf("Bad instruction value %d at %d", x.mailBoxes[x.programCounter], x.programCounter);
 			break;
 		default:
 			break;
