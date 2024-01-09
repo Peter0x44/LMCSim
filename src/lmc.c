@@ -3,11 +3,15 @@
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
+/*
 #if defined(__has_builtin)
 	#if __has_builtin(__builtin_unreachable)
 		#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
 	#endif
 #endif
+*/
+
+#define assert(e) do { if (!(e)) asm volatile("int3; nop"); } while (0)
 
 #include <stdio.h>
 #include <stdbool.h>
