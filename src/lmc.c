@@ -4,14 +4,22 @@
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
 /*
-#if defined(__has_builtin)
+*/
+
+#ifdef DEBUG
+
+// continuable assertion
+#define assert(e) do { if (!(e)) asm volatile("int3; nop"); } while (0)
+
+#elif defined(__has_builtin)
 	#if __has_builtin(__builtin_unreachable)
 		#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
 	#endif
-#endif
-*/
+#else
 
-#define assert(e) do { if (!(e)) asm volatile("int3; nop"); } while (0)
+#define assert(e) ((void)(0)) // this is what glibc does
+
+#endif
 
 #include <stdio.h>
 #include <stdbool.h>
