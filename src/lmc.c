@@ -26,27 +26,6 @@
 #include <string.h>
 #include <limits.h>
 
-typedef struct
-{
-	char* beginning;
-	char* end;
-} arena;
-
-// function doesn't take a size or alignment because I don't expect to allocate anything
-// other than chars using it.
-void* alloc(arena* a, ptrdiff_t count)
-{
-	ptrdiff_t available = a->end - a->beginning;
-	if (count > available)
-	{
-		return 0;
-	}
-	char* p = a->beginning;
-	a->beginning += count;
-	memset(p, 0, count);
-	return p;
-}
-
 bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
@@ -839,28 +818,6 @@ int main(void)
 			error = s8ToInteger(num, 0);
 			assert(error == NOT_A_NUMBER);
 		}
-	}
-
-	// Tests for arena allocator
-	{
-		char mem[1<<10];
-		arena a;
-		a.beginning = &mem[0];
-		a.end = &mem[sizeof(mem)];
-		arena free = a;
-
-		char* p = alloc(&a, 512);
-		assert(p);
-		p = alloc(&a, 256);
-		assert(p);
-		p = alloc(&a, 256);
-		assert(p);
-		p = alloc(&a, 2048);
-		assert(!p);
-
-		a = free;
-		p = alloc(&a, 1025);
-		assert(!p);
 	}
 }
 
