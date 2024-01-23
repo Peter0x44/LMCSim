@@ -23,9 +23,7 @@ typedef struct
 typedef struct
 {
 	int lineNumber;
-	s8 message; // each TAB means to insert context
-		    // this is to keep Assemble allocation-free
-	s8 context;
+	s8 message;
 } AssemblerError;
 
 typedef enum

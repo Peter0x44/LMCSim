@@ -39,51 +39,6 @@ void* alloc(arena* a, ptrdiff_t count)
 	return p;
 }
 
-s8 s8AssemblerError(AssemblerError error, arena* a)
-{
-	// -1 because tab character won't get copied
-	ptrdiff_t messageLen = error.message.len + error.context.len - 1;
-
-	s8 message;
-	message.str = alloc(a, messageLen);
-	message.len = messageLen;
-
-	s8 ret = message;
-
-	if (!message.str)
-	{
-		return (s8) { 0 };
-	}
-
-	while (error.message.str[0] != '\t')
-	{
-		assert(error.message.len > 0);
-		message.str[0] = error.message.str[0];
-		++error.message.str;
-		--error.message.len;
-		++message.str;
-		--message.len;
-	}
-
-	++error.message.str;
-	--error.message.len;
-
-	//assert(error.context.len > 0);
-	for (int i = 0; i < error.context.len; ++i)
-	{
-		message.str[i] = error.context.str[i];
-	}
-	message.str += error.context.len;
-	message.len -= error.context.len;
-
-	for (int i = 0; i < error.message.len; ++i)
-	{
-		message.str[i] = error.message.str[i];
-	}
-
-	return ret;
-}
-
 bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
@@ -102,10 +57,10 @@ bool s8Equal(s8 a, s8 b)
 // also escapes newlines and writes them verbatim like a debugger would
 void s8Print(s8 s)
 {
-//        printf("\"%.*s\"\n", (int)s.len, s.str);
-	putchar('\"');
+	//putchar('\"');
 	for (int i = 0; i < s.len; ++i)
 	{
+		/*
 		if (s.str[i] == '\n')
 		{
 			putchar('\\');
@@ -116,10 +71,16 @@ void s8Print(s8 s)
 			putchar('\\');
 			putchar('t');
 		}
+		else if (s.str[i] == '\r')
+		{
+			putchar('\\');
+			putchar('r');
+		}
 		else
-			putchar(s.str[i]);
+		*/
+		putchar(s.str[i]);
 	}
-	putchar('\"');
+	//putchar('\"');
 	putchar('\n');
 }
 
@@ -165,10 +126,6 @@ IntegerInputError s8ToInteger(s8 s, int* result)
 		}
 		value = value*10 + d;
 	}
-	if (value > 999)
-	{
-		return NOT_IN_RANGE;
-	}
 	if (negate) value *= -1;
 
 	*result = value;
@@ -210,8 +167,8 @@ int GetMnemonicValue(s8 mnemonic)
 {
 	if (false) {}
 
-	else if (s8iEqual(mnemonic, mnemonics[0 ]) // HLT
-		|| s8iEqual(mnemonic, S("COB")))   // COB
+	else if (s8iEqual(mnemonic, mnemonics[0 ])  // HLT
+		|| s8iEqual(mnemonic, S("COB")))    // COB
 		return 000;
 	else if (s8iEqual(mnemonic, mnemonics[1 ])) // ADD
 		return 100;
@@ -242,7 +199,7 @@ int GetMnemonicValue(s8 mnemonic)
 
 bool IsWhitespace(char c)
 {
-	return ((c == ' ') || (c == '\t'));
+	return ((c == ' ') || (c == '\t') || (c == '\r'));
 }
 
 s8 StripWhitespace(s8 line)
@@ -397,6 +354,59 @@ typedef struct
 	int value;
 } LabelInfo;
 
+typedef struct {
+	unsigned char* buf;
+	int capacity;
+	int len;
+	bool error;
+} buf;
+
+s8 bufTos8(buf* buffer)
+{
+	return (s8) { buffer->buf, buffer->len };
+}
+
+
+void append(buf* buffer, unsigned char* src, int len)
+{
+	int available = buffer->capacity - buffer->len;
+	// copy  over as much as possible
+	int amount = available < len ? available : len;
+	for (int i = 0; i < amount; ++i)
+	{
+		buffer->buf[buffer->len+i] = src[i];
+	}
+	buffer->len += amount;
+	// tried to append too much?
+	buffer->error |= amount < len;
+}
+
+void appends8(buf* buffer, s8 string)
+{
+	append(buffer, string.str, string.len);
+}
+
+void appendInteger(buf* buffer, int x)
+{
+	unsigned char tmp[64];
+	unsigned char* end = &tmp[sizeof(tmp)];
+	unsigned char* beginning = end;
+	int t;
+	if (x > 0) t = -x;
+	do
+	{
+		// append to the buffer "backwards"
+		--beginning;
+		*beginning = '0' - t%10;
+	} while (t /= 10);
+	if  (x < 0)
+	{
+		--beginning;
+		*beginning = '-';
+	}
+	append(buffer, beginning, end-beginning);
+}
+
 // Perhaps this return value is not well designed... it just makes the allocation the responsibility of other code
 // and can't return an error message with more than one "context"
 // Shouldn't be too hard to refactor if it becomes a problem
@@ -404,6 +414,16 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 {
 	assert(code);
 	memset(code->mailBoxes, 0, 100*sizeof(int));
+
+	// static buffer to hold error messages
+	// could allocate out of a passed arena, but that would be extra effort for callers
+	// I think static is okay for this case
+	static unsigned char mem[1<<14];
+	buf buffer;
+	buffer.buf = &mem[0];
+	buffer.capacity = sizeof(mem);
+	buffer.len = 0;
+	buffer.error = 0;
 
 	LabelInfo labels[100];
 	int labelCount = 0;
@@ -453,8 +473,10 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 						{
 							AssemblerError ret;
 							ret.lineNumber = lineNumber;
-							ret.message = S("label \t redefined");
-							ret.context = label;
+							appends8(&buffer, S("label \""));
+							appends8(&buffer, label);
+							appends8(&buffer, S("\" redefined"));
+							ret.message = bufTos8(&buffer);
 							return ret;
 						}
 						labelRedefined = true;
@@ -477,8 +499,10 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			{
 				AssemblerError ret;
 				ret.lineNumber = lineNumber;
-				ret.message = S("Unknown instruction \t");
-				ret.context = label;
+				appends8(&buffer, S("unknown instruction \""));
+				appends8(&buffer, label);
+				appends8(&buffer, S("\""));
+				ret.message = bufTos8(&buffer);
 				return ret;
 			}
 		}
@@ -488,15 +512,17 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		}
 	} 
 
-	if (strict && currentInstructionPointer > 100)
+	if (strict && currentInstructionPointer > 99)
 	{
 		// Peter Higginson LMC does not care about this, but lmc.awk does
 		// so, only check in strict mode
 		AssemblerError ret;
 		ret.lineNumber = lineNumber;
-		ret.message = S("Program contains too many\t instructions");
-		// I can't return currentInstructionPointer because it would require an allocation
-		ret.context = S("");
+		// The previous loop breaks when currentInstructionPointer > 99
+		// So, I can't write many instructions were in the program without some refactoring
+		// maybe a TODO, or more likely a waste of time.
+		appends8(&buffer, S("program contains more than 100 instructions."));
+		ret.message = bufTos8(&buffer);
 		return ret;
 	}
 
@@ -531,8 +557,10 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			// second word is still not a valid mnemonic - can't be a label, either
 			AssemblerError ret;
 			ret.lineNumber = lineNumber;
-			ret.message = S("unknown instruction \t");
-			ret.context = word;
+			appends8(&buffer, S("unknown instruction \""));
+			appends8(&buffer, word);
+			appends8(&buffer, S("\""));
+			ret.message = bufTos8(&buffer);
 			return ret;
 		}
 		bool takesAddress = ((opcode != 0) && (opcode % 100 == 0));
@@ -542,8 +570,10 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			// Peter higginson LMC and lmc.awk don't care about this, so the check is "opt-in" for strict only
 			AssemblerError ret;
 			ret.lineNumber = lineNumber;
-			ret.message = S("instruction \t does not take an address");
-			ret.context = word;
+			appends8(&buffer, S("instruction \""));
+			appends8(&buffer, word);
+			appends8(&buffer, S("\" does not take an address"));
+			ret.message = bufTos8(&buffer);
 			return ret;
 		}
 		int address = 0;
@@ -563,17 +593,22 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			{
 				AssemblerError ret;
 				ret.lineNumber = lineNumber;
-				ret.message = S("undefined address label \t");
-				ret.context = tmp;
+				appends8(&buffer, S("undefined address label \""));
+				appends8(&buffer, tmp);
+				appends8(&buffer, S("\""));
+				ret.message = bufTos8(&buffer);
 				return ret;
 			}
 		}
-		else if (error == NOT_IN_RANGE && (address < 0 || address > 99) && (opcode != 1000))
+		// Don't allow address values outside of 0-99, except for usage with DAT
+		else if (error == NOT_IN_RANGE || ((address < 0 || address > 99) && (opcode != 1000)))
 		{
 			AssemblerError ret;
 			ret.lineNumber = lineNumber;
-			ret.message = S("address label \t is out of range 0, 99");
-			ret.context = tmp;
+			appends8(&buffer, S("address label \""));
+			appends8(&buffer, tmp);
+			appends8(&buffer, S("\" is out of range [0, 100)"));
+			ret.message = bufTos8(&buffer);
 			return ret;
 		}
 
@@ -586,8 +621,10 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 			{
 				AssemblerError ret;
 				ret.lineNumber = lineNumber;
-				ret.message = S("junk \t found after address");
-				ret.context = line;
+				appends8(&buffer, S("junk \""));
+				appends8(&buffer, line);
+				appends8(&buffer, S("\" found after address"));
+				ret.message = bufTos8(&buffer);
 				return ret;
 			}
 		}
@@ -598,16 +635,11 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 		code->mailBoxes[currentInstructionPointer++] = opcode + address;
 	}
 
-	return (AssemblerError){0};
+	return (AssemblerError){ -1, {0,0} };
 }
 
 RuntimeError Step(LMCContext* code)
 {
-	assert(code);
-	for (int i = 0; i < 100; ++i)
-	{
-		//assert(code->mailBoxes[i] >= 0 && code->mailBoxes[i] < 1000);
-	}
 
 	if (code->programCounter > 99 || code->programCounter < 0)
 	{
@@ -706,6 +738,11 @@ RuntimeError Step(LMCContext* code)
 			ret = ERROR_BAD_INSTRUCTION;
 		}
 	}
+	else
+	{
+		ret  = ERROR_BAD_INSTRUCTION;
+	}
+
 	if (ret == ERROR_OK)
 	{
 		++code->programCounter;
@@ -823,42 +860,29 @@ int main(void)
 
 int main(int argc, char* argv[])
 {
-//	s8 program = S("        lda space\n sta char\n loop    lda char\n out\n lda space\n otc\n lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 97\n char    dat\n // start of ASCII character table\n");
-//	s8 program = S("        LDA lda1\n STA outputList\n LDA sta1\n STA store\n LDA zero\n STA listSize\n inputLoop INP\n BRZ resetLoop\n store   DAT 380\n LDA store\n ADD increment\n STA store\n LDA listSize\n ADD increment\n STA listSize\n BRA inputLoop\n resetLoop LDA lda1\n STA load1\n ADD increment\n STA load2\n LDA sta1\n STA store1\n ADD increment\n STA store2\n LDA listSize\n SUB increment\n STA loopCount\n LDA zero\n STA isChange\n load1   DAT 580\n STA buffA\n load2   DAT 581\n STA buffB\n cmp     SUB buffA\n BRP nextItem\n swap    LDA buffB\n store1  DAT 380\n LDA buffA\n store2  DAT 381\n LDA increment\n STA isChange\n nextItem LDA store1\n ADD increment\n STA store1\n ADD increment\n STA store2\n LDA load1\n ADD increment\n STA load1\n ADD increment\n STA load2\n LDA loopCount\n SUB increment\n STA loopCount\n BRZ isFinished\n BRA load1\n isFinished LDA isChange\n BRZ outputList\n bra resetLoop\n outputList DAT 580\n OUT\n LDA outputList\n ADD increment\n STA outputList\n LDA listSize\n SUB increment\n STA listSize\n BRZ end\n BRA outputList\n end     HLT\n zero    DAT 0\n buffA   DAT 0\n buffB   DAT 0\n isChange DAT 0\n increment DAT 1\n listSize DAT 0\n loopCount DAT 0\n sta1    DAT 380\n lda1    DAT 580\n");
-//	s8 program = S("        INP\n STA VALUE\n LDA ZERO\n STA TRINUM\n STA N\n LOOP    LDA TRINUM\n SUB VALUE\n BRP ENDLOOP\n LDA N\n ADD ONE\n STA N\n ADD TRINUM\n STA TRINUM\n BRA LOOP\n ENDLOOP LDA VALUE\n SUB TRINUM\n BRZ EQUAL\n LDA ZERO\n OUT\n BRA DONE\n EQUAL   LDA N\n OUT\n DONE    HLT\n VALUE   DAT\n TRINUM  DAT\n N       DAT\n ZERO    DAT 000\n ONE     DAT 001\n // Test if input is a triangular number\n // If is sum of 1 to n output n\n // otherwise output zero\n");
-//	s8 program = S("        INP\n STA VALUE\n LDA ONE\n STA MULT\n OUTER   LDA ZERO\n STA SUM\n STA TIMES\n INNER   LDA SUM\n ADD VALUE\n STA SUM\n LDA TIMES\n ADD ONE\n STA TIMES\n SUB MULT\n BRZ NEXT\n BRA INNER\n NEXT    LDA SUM\n OUT\n LDA MULT\n ADD ONE\n STA MULT\n SUB VALUE\n BRZ OUTER\n BRP DONE\n BRA OUTER\n DONE    HLT\n VALUE   DAT 0 // Times table for\n MULT    DAT 0 // one input number\n SUM     DAT\n TIMES   DAT\n COUNT   DAT\n ZERO    DAT 000\n ONE     DAT 001");
+	char* file = argc > 0 ? argv[1] : 0;
+	s8 program = s8FileMap(file);
 
-	//s8 program = S("\n\n\nDat 10\n\n");
-	//s8 program = S("loop    lda counter\n add one\n otc\n sta counter\n sub begin\n sub twentysix\n brp end\n bra loop\n end     HLT\n counter DAT 96\n one     DAT 1\n twentysix DAT 26\n begin   DAT 96\n ");
-//	s8 program = S("        lda space\n sta char\n loop    lda char\n otc\n add one\n sta char\n sub max\n brz end\n bra loop\n end     hlt\n space   dat 32\n one     dat 1\n max     dat 127\n char    dat\n // output the basic ASCII characters\n ");
-	s8 program = s8FileMap(argv[1]);
 	if (s8Equal(program, S(""))) return 1;
 	
 	LMCContext x = {0} ;
 
-	AssemblerError ret = Assemble(program, &x, true);
+	AssemblerError ret = Assemble(program, &x, false);
 
-	char mem[1<<17];
-	arena a;
-	a.beginning = &mem[0];
-	a.end = &mem[sizeof(mem)];
-
-	if (ret.lineNumber != 0)
+	if (ret.lineNumber != -1)
 	{
 		printf("%d\n", ret.lineNumber);
-		s8 message = s8AssemblerError(ret, &a);
-		s8Print(message);
+		s8Print(ret.message);
 	}
 
-	for (int i = 0; i < 10; ++i)
-	{
-		for (int j = 0; j < 9; ++j)
-		{
-			printf("%03i ", x.mailBoxes[i*10+j]);
-		}
-		printf("%03i", x.mailBoxes[i*10+9]);
-		printf("\n");
-	}
+	//for (int i = 0; i < 10; ++i)
+	//{
+	//	for (int j = 0; j < 9; ++j)
+	//	{
+	//		printf("%03i ", x.mailBoxes[i*10+j]);
+	//	}
+	//	printf("%03i\n", x.mailBoxes[i*10+9]);
+	//}
 
 	RuntimeError termination;
 	while (true)
@@ -880,6 +904,6 @@ int main(int argc, char* argv[])
 		default:
 			break;
 	}
-	printf("\n");
+	putchar('\n');
 }
 #endif
