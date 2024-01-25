@@ -3,9 +3,6 @@
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
-/*
-*/
-
 #ifdef DEBUG
 
 // continuable assertion
@@ -26,7 +23,7 @@
 #include <string.h>
 #include <limits.h>
 
-bool s8Equal(s8 a, s8 b)
+static bool s8Equal(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
 
@@ -42,7 +39,7 @@ bool s8Equal(s8 a, s8 b)
 
 // function to print s8s for debugging
 // also escapes newlines and writes them verbatim like a debugger would
-void s8Print(s8 s)
+static void s8Print(s8 s)
 {
 	//putchar('\"');
 	for (int i = 0; i < s.len; ++i)
@@ -71,7 +68,7 @@ void s8Print(s8 s)
 	putchar('\n');
 }
 
-bool IsDigit(unsigned char c)
+static bool IsDigit(unsigned char c)
 {
 	return ((c >= '0') && (c <= '9'));
 }
@@ -82,7 +79,7 @@ typedef enum
 	NOT_IN_RANGE = 2,
 } IntegerInputError;
 
-IntegerInputError s8ToInteger(s8 s, int* result)
+static IntegerInputError s8ToInteger(s8 s, int* result)
 {
 	int i = 0;
 	bool negate = false;
@@ -119,12 +116,12 @@ IntegerInputError s8ToInteger(s8 s, int* result)
 	return 0;
 }
 
-bool IsLower(unsigned char c)
+static bool IsLower(unsigned char c)
 {
 	return (c >= 'a' && c <= 'z');
 }
 
-unsigned char ToUpper(unsigned char c)
+static unsigned char ToUpper(unsigned char c)
 {
 	if (IsLower(c))
 		c += 'A' - 'a';
@@ -148,9 +145,9 @@ static const s8 mnemonics[] = {
 };
 
 // Give proper forward declarations later
-bool s8iEqual(s8 a, s8 b);
+static bool s8iEqual(s8 a, s8 b);
 
-int GetMnemonicValue(s8 mnemonic)
+static int GetMnemonicValue(s8 mnemonic)
 {
 	if (false) {}
 
@@ -184,12 +181,12 @@ int GetMnemonicValue(s8 mnemonic)
 		return -1;
 }
 
-bool IsWhitespace(char c)
+static bool IsWhitespace(char c)
 {
 	return ((c == ' ') || (c == '\t') || (c == '\r'));
 }
 
-s8 StripWhitespace(s8 line)
+static s8 StripWhitespace(s8 line)
 {
 	while (line.len > 0 && IsWhitespace(*line.str))
 	{
@@ -205,14 +202,14 @@ s8 StripWhitespace(s8 line)
 	return line;
 }
 
-bool IsCommentToken(char c)
+static bool IsCommentToken(char c)
 {
 	return ((c == '#') || (c == '/') || (c == ';'));
 }
 
 // Strips comments from the end of the line
 // 3 tokens are supported: // ; #
-s8 StripComment(s8 line)
+static s8 StripComment(s8 line)
 {
 	unsigned char* commentPos = 0;
 	bool wasSlash = false;
@@ -244,13 +241,13 @@ s8 StripComment(s8 line)
 	return line;
 }
 
-bool IsNewline(char c)
+static bool IsNewline(char c)
 {
 	return ((c == '\n') || (c == '\r'));
 }
 
 // Extract next line of "buf". Modifies buf to point to the next line too, so it can be called repeatedly until it returns an empty string
-s8 GetLine(s8* buf)
+static s8 GetLine(s8* buf)
 {
 	assert(buf);
 	// skip over any \r, if they are at the beginning
@@ -288,7 +285,7 @@ s8 GetLine(s8* buf)
 	return ret;
 }
 
-s8 GetWord(s8* line)
+static s8 GetWord(s8* line)
 {
 	assert(line);
 
@@ -323,7 +320,7 @@ s8 GetWord(s8* line)
 }
 
 // Case insensitive comparison
-bool s8iEqual(s8 a, s8 b)
+static bool s8iEqual(s8 a, s8 b)
 {
 	if (a.len != b.len) return false;
 
@@ -348,13 +345,13 @@ typedef struct {
 	bool error;
 } buf;
 
-s8 bufTos8(buf* buffer)
+static s8 bufTos8(buf* buffer)
 {
 	return (s8) { buffer->buf, buffer->len };
 }
 
 
-void append(buf* buffer, unsigned char* src, int len)
+static void append(buf* buffer, unsigned char* src, int len)
 {
 	int available = buffer->capacity - buffer->len;
 	// copy  over as much as possible
@@ -368,12 +365,12 @@ void append(buf* buffer, unsigned char* src, int len)
 	buffer->error |= amount < len;
 }
 
-void appends8(buf* buffer, s8 string)
+static void appends8(buf* buffer, s8 string)
 {
 	append(buffer, string.str, string.len);
 }
 
-void appendInteger(buf* buffer, int x)
+static void appendInteger(buf* buffer, int x)
 {
 	unsigned char tmp[64];
 	unsigned char* end = &tmp[sizeof(tmp)];
