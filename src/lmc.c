@@ -86,11 +86,12 @@ static IntegerInputError s8ToInteger(s8 s, int* result)
 	unsigned int value = 0;
 	unsigned int limit = INT_MAX;
 
-	switch (*s.str) {
+	switch (*s.str)
+	{
 		case '-':
 			i = 1;
 			negate = true;
-			limit = UINT_MAX;
+			limit = 0x80000000;
 			break;
 		case '+':
 			i = 1;
@@ -702,10 +703,17 @@ RuntimeError Step(LMCContext* code)
 		// Need some ideas on how to get it - maybe use function pointer callbacks???
 		if (operand == 1) // INP
 		{
-			// Terrible implementation
 			int input;
-			scanf("%d", &input);
-			code->accumulator = input;
+			bool didParse = (*code->inpFunction)(&input, code->inputCtx);
+			if (didParse)
+			{
+				code->accumulator = input;
+			}
+			else
+			{
+				ret = ERROR_BAD_INPUT;
+			}
+
 		}
 
 		else if (operand == 2) // OUT
@@ -828,6 +836,8 @@ int main(int argc, char* argv[])
 	if (s8Equal(program, S(""))) return 1;
 	
 	LMCContext x = {0} ;
+	extern bool ReadIntCallbackDefault(int* input, void* ctx);
+	x.inpFunction = ReadIntCallbackDefault;
 
 	AssemblerError ret = Assemble(program, &x, false);
 
@@ -837,20 +847,16 @@ int main(int argc, char* argv[])
 		s8Print(ret.message);
 	}
 
-	//for (int i = 0; i < 10; ++i)
-	//{
-	//	for (int j = 0; j < 9; ++j)
-	//	{
-	//		printf("%03i ", x.mailBoxes[i*10+j]);
-	//	}
-	//	printf("%03i\n", x.mailBoxes[i*10+9]);
-	//}
-
 	RuntimeError termination;
 	while (true)
 	{
 		termination = Step(&x);
 
+		if (termination == ERROR_BAD_INPUT)
+		{
+			printf("Bad integer input!\n");
+		}
+		else
 		if (termination != ERROR_OK) break;
 	}
 	switch (termination)
