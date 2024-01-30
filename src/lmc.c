@@ -10,7 +10,9 @@
 
 #elif defined(__has_builtin)
 	#if __has_builtin(__builtin_unreachable)
-		#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0)
+		#define assert(e) do { if (!(e)) __builtin_unreachable(); } while (0) // optimization hint
+	#else
+		#define assert(e) ((void)(0)) // I think this is needed to handle a "unreachable-less compiler with builtins"
 	#endif
 #else
 
