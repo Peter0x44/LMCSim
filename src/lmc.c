@@ -20,9 +20,7 @@
 
 #endif
 
-#include <stdio.h>
 #include <stdbool.h>
-#include <string.h>
 #include <limits.h>
 
 static bool s8Equal(s8 a, s8 b)
@@ -38,37 +36,6 @@ static bool s8Equal(s8 a, s8 b)
 	return true;
 }
 
-
-// function to print s8s for debugging
-// also escapes newlines and writes them verbatim like a debugger would
-static void s8Print(s8 s)
-{
-	//putchar('\"');
-	for (int i = 0; i < s.len; ++i)
-	{
-		/*
-		if (s.str[i] == '\n')
-		{
-			putchar('\\');
-			putchar('n');
-		}
-		else if (s.str[i] == '\t')
-		{
-			putchar('\\');
-			putchar('t');
-		}
-		else if (s.str[i] == '\r')
-		{
-			putchar('\\');
-			putchar('r');
-		}
-		else
-		*/
-		putchar(s.str[i]);
-	}
-	//putchar('\"');
-	putchar('\n');
-}
 
 static bool IsDigit(unsigned char c)
 {
@@ -353,7 +320,6 @@ static s8 bufTos8(buf* buffer)
 	return (s8) { buffer->buf, buffer->len };
 }
 
-
 static void append(buf* buffer, unsigned char* src, int len)
 {
 	int available = buffer->capacity - buffer->len;
@@ -394,13 +360,18 @@ static void appendInteger(buf* buffer, int x)
 	append(buffer, beginning, end-beginning);
 }
 
+static void appendChar(buf* buffer, char c)
+{
+	append(buffer, &c, 1);
+}
+
 // Perhaps this return value is not well designed... it just makes the allocation the responsibility of other code
 // and can't return an error message with more than one "context"
 // Shouldn't be too hard to refactor if it becomes a problem
 AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict)
 {
 	assert(code);
-	memset(code->mailBoxes, 0, 100*sizeof(int));
+	for (int i = 0; i < 100; ++i) code->mailBoxes[i] = 0;
 
 	// static buffer to hold error messages
 	// could allocate out of a passed arena, but that would be extra effort for callers
@@ -720,12 +691,25 @@ RuntimeError Step(LMCContext* code)
 
 		else if (operand == 2) // OUT
 		{
-			printf("%d\n", (int)code->accumulator);
+			char mem[12];
+			buf buffer;
+			buffer.buf = &mem[0];
+			buffer.capacity = sizeof(mem);
+			buffer.len = 0;
+			buffer.error = 0;
+
+			appendInteger(&buffer, (int)code->accumulator);
+			appendChar(&buffer, '\n');
+			s8 s = bufTos8(&buffer);
+
+			(*code->outFunction)(s.str, s.len, code->outputCtx);
 		}
 
 		else if (operand == 22) // OTC
 		{
-			putchar((unsigned char) code->accumulator);
+			unsigned char c = code->accumulator;
+			s8 s = (s8){&c, 1};
+			(*code->outFunction)(s.str, s.len, code->inputCtx);
 		}
 		else
 		{
@@ -838,15 +822,26 @@ int main(int argc, char* argv[])
 	if (s8Equal(program, S(""))) return 1;
 	
 	LMCContext x = {0} ;
-	extern bool ReadIntCallbackDefault(int* input, void* ctx);
-	x.inpFunction = ReadIntCallbackDefault;
+	extern bool InpCallbackDefault(int* input, void* ctx);
+	x.inpFunction = InpCallbackDefault;
+	extern void OutCallbackDefault(unsigned char* str, ptrdiff_t len, void* ctx);
+	x.outFunction = OutCallbackDefault;
 
 	AssemblerError ret = Assemble(program, &x, false);
 
 	if (ret.lineNumber != -1)
 	{
-		printf("%d\n", ret.lineNumber);
-		s8Print(ret.message);
+		char mem[12];
+		buf buffer;
+		buffer.buf = &mem[0];
+		buffer.capacity = sizeof(mem);
+		buffer.len = 0;
+		buffer.error = 0;
+
+		appendInteger(&buffer, ret.lineNumber);
+		appendChar(&buffer, '\n');
+		s8 s = bufTos8(&buffer);
+		OutCallbackDefault(s.str, s.len, 0);
 	}
 
 	RuntimeError termination;
@@ -856,24 +851,39 @@ int main(int argc, char* argv[])
 
 		if (termination == ERROR_BAD_INPUT)
 		{
-			printf("Bad integer input!\n");
+			s8 s = S("Bad integer input!\n");
+			OutCallbackDefault(s.str, s.len, 0);
 		}
-		else
-		if (termination != ERROR_OK) break;
+		else if (termination != ERROR_OK) break;
 	}
+	unsigned char mem[60];
+	buf buffer;
+	buffer.buf = &mem[0];
+	buffer.capacity = sizeof(mem);
+	buffer.len = 0;
+	buffer.error = 0;
+
+	s8 s;
+
 	switch (termination)
 	{
 		case ERROR_HALT:
 			break; // normal program termination
 		case ERROR_BAD_PC:
-			printf("Bad PC value %d", x.programCounter);
+			appends8(&buffer, S("Bad PC value "));
+			appendInteger(&buffer, x.programCounter);
 			break;
 		case ERROR_BAD_INSTRUCTION:
-			printf("Bad instruction value %d at %d", x.mailBoxes[x.programCounter], x.programCounter);
+			appends8(&buffer, S("Bad instruction value "));
+			appendInteger(&buffer, x.mailBoxes[x.programCounter]);
+			appends8(&buffer, S(" at "));
+			appendInteger(&buffer, x.programCounter);
 			break;
 		default:
 			break;
 	}
-	putchar('\n');
+	appendChar(&buffer, '\n');
+	s = bufTos8(&buffer);
+	OutCallbackDefault(s.str, s.len, 0);
 }
 #endif

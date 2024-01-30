@@ -3,9 +3,8 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-typedef bool(*ReadIntCallback)(int* input, void* ctx);
-typedef void(*WriteIntCallback)(int c, void* ctx);
-typedef void(*WriteCharCallback)(char c, void* ctx);
+typedef bool(*InpCallback)(int* input, void* ctx);
+typedef void(*OutCallback)(unsigned char* str, ptrdiff_t len, void* ctx);
 
 typedef struct
 {
@@ -13,9 +12,9 @@ typedef struct
 	unsigned int accumulator;
 	int programCounter;
 	void* inputCtx;
-	ReadIntCallback inpFunction;
-	WriteIntCallback outFunction;
-	WriteCharCallback otcFunction;
+	void* outputCtx;
+	InpCallback inpFunction;
+	OutCallback outFunction;
 } LMCContext;
 
 typedef struct
