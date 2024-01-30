@@ -1,0 +1,13 @@
+loop 	lda counter
+	add one
+	otc
+	sta counter
+	sub begin
+	sub twentysix
+	brp end
+	bra loop
+end 	hlt
+counter	dat 96
+one	dat 1
+twentysix dat 26
+begin	dat 96

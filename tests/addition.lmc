@@ -1,0 +1,10 @@
+        INP
+        sta first
+        inp 
+        sta second
+        add first
+        out
+	hlt
+first   dat
+second  dat
+
