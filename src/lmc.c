@@ -728,7 +728,42 @@ RuntimeError Step(LMCContext* code)
 	return ret;
 }
 
+s8 RuntimeError_StrError(LMCContext* code, RuntimeError error)
+{
+	static unsigned char mem[60];
+	buf buffer;
+	buffer.buf = &mem[0];
+	buffer.capacity = sizeof(mem);
+	buffer.len = 0;
+	buffer.error = 0;
+
+	switch (error)
+	{
+		case ERROR_OK:
+			return (s8) { 0, 0 }; // no error to report
+		case ERROR_HALT:
+			break; // normal program termination
+		case ERROR_BAD_PC:
+			appends8(&buffer, S("Bad PC value "));
+			appendInteger(&buffer, code->programCounter);
+			break;
+		case ERROR_BAD_INSTRUCTION:
+			appends8(&buffer, S("Bad instruction value "));
+			appendInteger(&buffer, code->mailBoxes[code->programCounter]);
+			appends8(&buffer, S(" at "));
+			appendInteger(&buffer, code->programCounter);
+			break;
+		default:
+			break;
+	}
+	return bufTos8(&buffer);
+}
+
+
 #ifdef TEST
+
+#include <stdio.h>
+#include <string.h>
 
 #define testcase(s1, s2) assert(s8Equal(s1, s2))
 
@@ -816,10 +851,10 @@ int main(void)
 
 int main(int argc, char* argv[])
 {
-	char* file = argc > 0 ? argv[1] : 0;
-	s8 program = s8FileMap(file);
+	if (argc <= 1) return 0;
+	s8 program = s8FileMap(argv[1]);
 
-	if (s8Equal(program, S(""))) return 1;
+	if (!program.str) return 2; //s8Equal(program, S(""))) return 1;
 	
 	LMCContext x = {0} ;
 	extern bool InpCallbackDefault(int* input, void* ctx);

@@ -23,7 +23,7 @@ typedef struct
 	ptrdiff_t len;
 } s8;
 
-// Types of errors, could be bad assembly, or something else
+// a bit of an API inconsistency to return a struct from one function and an enum from another - oh well
 typedef struct
 {
 	int lineNumber;
@@ -49,6 +49,9 @@ AssemblerError Assemble(s8 assembly, LMCContext* code, bool strict);
 
 // Execute next instruction of code
 RuntimeError Step(LMCContext* code);
+
+// Get error string from runtime error
+s8 RuntimeError_StrError(LMCContext* code, RuntimeError error);
 
 #ifdef __cplusplus
 }
