@@ -344,8 +344,7 @@ static void appendInteger(buf* buffer, int x)
 	unsigned char tmp[64];
 	unsigned char* end = &tmp[sizeof(tmp)];
 	unsigned char* beginning = end;
-	int t;
-	if (x > 0) t = -x;
+	int t = x>0 ? -x : x;
 	do
 	{
 		// append to the buffer "backwards"
@@ -360,7 +359,7 @@ static void appendInteger(buf* buffer, int x)
 	append(buffer, beginning, end-beginning);
 }
 
-static void appendChar(buf* buffer, char c)
+static void appendChar(buf* buffer, unsigned char c)
 {
 	append(buffer, &c, 1);
 }
@@ -691,7 +690,7 @@ RuntimeError Step(LMCContext* code)
 
 		else if (operand == 2) // OUT
 		{
-			char mem[12];
+			unsigned char mem[12];
 			buf buffer;
 			buffer.buf = &mem[0];
 			buffer.capacity = sizeof(mem);
@@ -862,11 +861,11 @@ int main(int argc, char* argv[])
 	extern void OutCallbackDefault(unsigned char* str, ptrdiff_t len, void* ctx);
 	x.outFunction = OutCallbackDefault;
 
-	AssemblerError ret = Assemble(program, &x, false);
+	AssemblerError ret = Assemble(program, &x, true);
 
 	if (ret.lineNumber != -1)
 	{
-		char mem[12];
+		unsigned char mem[12];
 		buf buffer;
 		buffer.buf = &mem[0];
 		buffer.capacity = sizeof(mem);
@@ -874,9 +873,13 @@ int main(int argc, char* argv[])
 		buffer.error = 0;
 
 		appendInteger(&buffer, ret.lineNumber);
-		appendChar(&buffer, '\n');
+		appends8(&buffer, S(": "));
 		s8 s = bufTos8(&buffer);
 		OutCallbackDefault(s.str, s.len, 0);
+		OutCallbackDefault(ret.message.str, ret.message.len, 0);
+		unsigned char n = '\n';
+		OutCallbackDefault(&n, 1, 0);
+		return 1;
 	}
 
 	RuntimeError termination;
@@ -886,39 +889,16 @@ int main(int argc, char* argv[])
 
 		if (termination == ERROR_BAD_INPUT)
 		{
-			s8 s = S("Bad integer input!\n");
+			s8 s = RuntimeError_StrError(&x, termination);
 			OutCallbackDefault(s.str, s.len, 0);
 		}
 		else if (termination != ERROR_OK) break;
 	}
-	unsigned char mem[60];
-	buf buffer;
-	buffer.buf = &mem[0];
-	buffer.capacity = sizeof(mem);
-	buffer.len = 0;
-	buffer.error = 0;
+	s8 s = RuntimeError_StrError(&x, termination);
 
-	s8 s;
-
-	switch (termination)
-	{
-		case ERROR_HALT:
-			break; // normal program termination
-		case ERROR_BAD_PC:
-			appends8(&buffer, S("Bad PC value "));
-			appendInteger(&buffer, x.programCounter);
-			break;
-		case ERROR_BAD_INSTRUCTION:
-			appends8(&buffer, S("Bad instruction value "));
-			appendInteger(&buffer, x.mailBoxes[x.programCounter]);
-			appends8(&buffer, S(" at "));
-			appendInteger(&buffer, x.programCounter);
-			break;
-		default:
-			break;
-	}
-	appendChar(&buffer, '\n');
-	s = bufTos8(&buffer);
 	OutCallbackDefault(s.str, s.len, 0);
+
+	unsigned char n = '\n';
+	OutCallbackDefault(&n, 1, 0);
 }
 #endif
