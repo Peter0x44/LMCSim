@@ -14,7 +14,7 @@ static bool IsWhiteSpace(char c)
 	return (c == '\n' || c == '\r' || c == ' ' || c == '\t');
 }
 
-bool InpCallbackDefault(int* input, void* ctx)
+static bool InpCallbackDefault(int* input, void* ctx)
 {
 	(void) ctx; // unused since reading from stdin
 	char digit;

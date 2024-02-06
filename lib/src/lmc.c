@@ -1,5 +1,4 @@
 #include "lmc.h"
-#include "mapfile.h"
 
 #define S(s) (s8) { (unsigned char*)s, (ptrdiff_t)(sizeof(s)-1) }
 
@@ -848,57 +847,4 @@ int main(void)
 
 #else
 
-int main(int argc, char* argv[])
-{
-	if (argc <= 1) return 0;
-	s8 program = s8FileMap(argv[1]);
-
-	if (!program.str) return 2; //s8Equal(program, S(""))) return 1;
-	
-	LMCContext x = {0} ;
-	extern bool InpCallbackDefault(int* input, void* ctx);
-	x.inpFunction = InpCallbackDefault;
-	extern void OutCallbackDefault(unsigned char* str, ptrdiff_t len, void* ctx);
-	x.outFunction = OutCallbackDefault;
-
-	AssemblerError ret = Assemble(program, &x, true);
-
-	if (ret.lineNumber != -1)
-	{
-		unsigned char mem[12];
-		buf buffer;
-		buffer.buf = &mem[0];
-		buffer.capacity = sizeof(mem);
-		buffer.len = 0;
-		buffer.error = 0;
-
-		appendInteger(&buffer, ret.lineNumber);
-		appends8(&buffer, S(": "));
-		s8 s = bufTos8(&buffer);
-		OutCallbackDefault(s.str, s.len, 0);
-		OutCallbackDefault(ret.message.str, ret.message.len, 0);
-		unsigned char n = '\n';
-		OutCallbackDefault(&n, 1, 0);
-		return 1;
-	}
-
-	RuntimeError termination;
-	while (true)
-	{
-		termination = Step(&x);
-
-		if (termination == ERROR_BAD_INPUT)
-		{
-			s8 s = RuntimeError_StrError(&x, termination);
-			OutCallbackDefault(s.str, s.len, 0);
-		}
-		else if (termination != ERROR_OK) break;
-	}
-	s8 s = RuntimeError_StrError(&x, termination);
-
-	OutCallbackDefault(s.str, s.len, 0);
-
-	unsigned char n = '\n';
-	OutCallbackDefault(&n, 1, 0);
-}
 #endif
